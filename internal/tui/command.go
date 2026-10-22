@@ -1,0 +1,89 @@
+package tui
+
+import "strings"
+
+// CommandKind identifies a slash command understood by the command bar.
+type CommandKind int
+
+const (
+	CmdUnknown CommandKind = iota
+	CmdWhatsup
+	CmdDiagnose
+	CmdContainers
+	CmdNetworks
+	CmdVolumes
+	CmdOtelStatus
+	CmdPruneTelemetry
+	CmdHelp
+	CmdQuit
+)
+
+// Command is the parsed form of a command bar input.
+type Command struct {
+	Kind CommandKind
+	Name string   // canonical name, e.g. "whatsup"
+	Args []string // positional arguments
+	Raw  string
+}
+
+// commandSpec describes a command for parsing and help rendering.
+type commandSpec struct {
+	Kind    CommandKind
+	Names   []string // first is canonical, the rest are aliases
+	Usage   string
+	Summary string
+	Key     string
+}
+
+// commandTable is the single source of truth for available commands.
+var commandTable = []commandSpec{
+	{CmdWhatsup, []string{"whatsup", "pulse"}, "/whatsup", "Resumen determinista de lo que ocurre", "?"},
+	{CmdDiagnose, []string{"diagnose", "diag"}, "/diagnose [container]", "Clasifica la causa raíz y muestra el runbook", "d"},
+	{CmdContainers, []string{"containers", "c"}, "/containers", "Vista de contenedores", "1"},
+	{CmdNetworks, []string{"networks", "n"}, "/networks", "Vista de redes", "2"},
+	{CmdVolumes, []string{"volumes", "v"}, "/volumes", "Vista de volúmenes", "3"},
+	{CmdOtelStatus, []string{"otel"}, "/otel status", "Estado del receptor OTLP y DuckDB", ""},
+	{CmdPruneTelemetry, []string{"prune-telemetry", "prune"}, "/prune-telemetry", "Borra telemetría antigua en DuckDB", ""},
+	{CmdHelp, []string{"help", "h"}, "/help", "Muestra esta ayuda", ""},
+	{CmdQuit, []string{"quit", "q", "exit"}, "/quit", "Salir de OkShield", "ctrl+c"},
+}
+
+// ParseCommand parses a command bar input such as "/diagnose api". The
+// leading slash is optional. Unknown commands yield Kind == CmdUnknown.
+func ParseCommand(input string) Command {
+	raw := strings.TrimSpace(input)
+	fields := strings.Fields(strings.TrimPrefix(raw, "/"))
+	if len(fields) == 0 {
+		return Command{Kind: CmdUnknown, Raw: raw}
+	}
+	name := strings.ToLower(fields[0])
+	args := fields[1:]
+
+	for _, spec := range commandTable {
+		for _, n := range spec.Names {
+			if n != name {
+				continue
+			}
+			cmd := Command{Kind: spec.Kind, Name: spec.Names[0], Args: args, Raw: raw}
+			// "/otel" requires the "status" subcommand (default to it).
+			if spec.Kind == CmdOtelStatus && len(args) > 0 && strings.ToLower(args[0]) != "status" {
+				cmd.Kind = CmdUnknown
+			}
+			return cmd
+		}
+	}
+	return Command{Kind: CmdUnknown, Name: name, Args: args, Raw: raw}
+}
+
+// Suggest returns canonical usages whose name starts with the given prefix,
+// used for command bar autocompletion hints.
+func Suggest(prefix string) []string {
+	p := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(prefix), "/"))
+	out := make([]string, 0, len(commandTable))
+	for _, spec := range commandTable {
+		if strings.HasPrefix(spec.Names[0], p) {
+			out = append(out, spec.Usage)
+		}
+	}
+	return out
+}
