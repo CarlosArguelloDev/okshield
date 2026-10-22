@@ -110,8 +110,8 @@ func (m Model) renderSidebar(w, h int) string {
 	controls := [][2]string{
 		{"↑/↓", "Scroll"},
 		{"1/2/3", "Views"},
-		{"tab", "Tabs"},
-		{"←/→", "Focus"},
+		{"←/→", "Tabs"},
+		{"tab", "Focus"},
 		{"?", "Whatsup"},
 		{"d", "Diagnose"},
 		{"/", "Command"},
@@ -187,17 +187,7 @@ func (m Model) renderInspector(w, h int) string {
 	header := strings.Join(tabs, s.Muted.Render(" │ "))
 
 	bodyRows := max(1, h-4)
-	var body string
-	switch m.tab {
-	case TabSummary:
-		body = m.renderPulse(bodyRows)
-	case TabDetails:
-		body = m.renderDetails()
-	case TabLogs:
-		body = m.renderLogs(bodyRows)
-	case TabDiagnose:
-		body = m.renderDiagnose()
-	}
+	body := scrollLines(m.inspectorBody(bodyRows), m.mainScroll, bodyRows)
 
 	borderColor := ColorSecondary
 	if m.focus == FocusMain {
@@ -211,6 +201,20 @@ func (m Model) renderInspector(w, h int) string {
 		Body:        body,
 		FootBadges:  []string{m.tab.String(), fmt.Sprintf("%d/%d", int(m.tab)+1, int(tabCount))},
 	})
+}
+
+func (m Model) inspectorBody(bodyRows int) string {
+	switch m.tab {
+	case TabSummary:
+		return m.renderPulse(bodyRows)
+	case TabDetails:
+		return m.renderDetails()
+	case TabLogs:
+		return m.renderLogs(bodyRows)
+	case TabDiagnose:
+		return m.renderDiagnose()
+	}
+	return ""
 }
 
 func (m Model) renderProcessesBox(w, h int) string {
@@ -237,12 +241,17 @@ func (m Model) renderProcessesBox(w, h int) string {
 	if anomalies == 0 && b.Len() == 0 {
 		b.WriteString(s.StatusBadge(HealthOK, GlyphOK) + " " + s.Muted.Render("Sin anomalías activas (? para /whatsup)"))
 	}
+	bodyRows := max(1, h-2)
+	borderColor := ColorSecondary
+	if m.focus == FocusProcesses {
+		borderColor = ColorFocus
+	}
 	return renderBox(boxSpec{
 		Width:       w,
 		Height:      h,
-		BorderColor: ColorSecondary,
+		BorderColor: borderColor,
 		TopTitle:    "Processes",
-		Body:        strings.TrimRight(b.String(), "\n"),
+		Body:        scrollLines(strings.TrimRight(b.String(), "\n"), m.procScroll, bodyRows),
 		FootBadges:  []string{fmt.Sprintf("%d/%d", anomalies, len(m.containers))},
 	})
 }
@@ -302,14 +311,31 @@ func (m Model) renderMetadataBox(w, h int) string {
 	if fields == 0 {
 		b.WriteString(s.Muted.Render("Sin recurso seleccionado"))
 	}
+	bodyRows := max(1, h-2)
+	borderColor := ColorSecondary
+	if m.focus == FocusMetadata {
+		borderColor = ColorFocus
+	}
 	return renderBox(boxSpec{
 		Width:       w,
 		Height:      h,
-		BorderColor: ColorSecondary,
+		BorderColor: borderColor,
 		TopTitle:    "Metadata",
-		Body:        strings.TrimRight(b.String(), "\n"),
+		Body:        scrollLines(strings.TrimRight(b.String(), "\n"), m.metaScroll, bodyRows),
 		FootBadges:  []string{fmt.Sprintf("%d/%d", min(1, fields), fields)},
 	})
+}
+
+func scrollLines(body string, offset, rows int) string {
+	if offset <= 0 || body == "" {
+		return body
+	}
+	lines := strings.Split(body, "\n")
+	maxOff := max(0, len(lines)-max(1, rows))
+	if offset > maxOff {
+		offset = maxOff
+	}
+	return strings.Join(lines[offset:], "\n")
 }
 
 func (m Model) connGlyph(c ConnState) string {

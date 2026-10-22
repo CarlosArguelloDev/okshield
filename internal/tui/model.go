@@ -49,8 +49,12 @@ type Focus int
 const (
 	FocusSidebar Focus = iota
 	FocusMain
+	FocusProcesses
+	FocusMetadata
 	FocusCommand
 )
+
+const focusPaneCount = 4
 
 // memTickInterval is how often the self-memory badge is refreshed.
 const memTickInterval = time.Second
@@ -95,10 +99,13 @@ type Model struct {
 	docker   ConnState
 	otel     ConnState
 
-	view   View
-	tab    Tab
-	focus  Focus
-	cursor int
+	view       View
+	tab        Tab
+	focus      Focus
+	cursor     int
+	mainScroll int
+	procScroll int
+	metaScroll int
 
 	containers []docker.Container
 	networks   []docker.Network

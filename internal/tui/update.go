@@ -126,22 +126,54 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "3":
 		return m.dispatch(Command{Kind: CmdVolumes})
 	case "tab":
-		m.tab = (m.tab + 1) % tabCount
+		m.focus = Focus((int(m.focus) + 1) % focusPaneCount)
 	case "shift+tab":
-		m.tab = (m.tab + tabCount - 1) % tabCount
+		m.focus = Focus((int(m.focus) + focusPaneCount - 1) % focusPaneCount)
 	case "left", "h":
-		m.focus = FocusSidebar
-	case "right", "l", "enter":
+		m.tab = (m.tab + tabCount - 1) % tabCount
+		m.mainScroll = 0
+	case "right", "l":
+		m.tab = (m.tab + 1) % tabCount
+		m.mainScroll = 0
+	case "enter":
 		m.focus = FocusMain
 	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-			return m, m.detailCmd()
+		switch m.focus {
+		case FocusMain:
+			if m.mainScroll > 0 {
+				m.mainScroll--
+			}
+		case FocusProcesses:
+			if m.procScroll > 0 {
+				m.procScroll--
+			}
+		case FocusMetadata:
+			if m.metaScroll > 0 {
+				m.metaScroll--
+			}
+		default:
+			if m.cursor > 0 {
+				m.cursor--
+				m.mainScroll = 0
+				m.metaScroll = 0
+				return m, m.detailCmd()
+			}
 		}
 	case "down", "j":
-		if m.cursor < m.itemCount()-1 {
-			m.cursor++
-			return m, m.detailCmd()
+		switch m.focus {
+		case FocusMain:
+			m.mainScroll++
+		case FocusProcesses:
+			m.procScroll++
+		case FocusMetadata:
+			m.metaScroll++
+		default:
+			if m.cursor < m.itemCount()-1 {
+				m.cursor++
+				m.mainScroll = 0
+				m.metaScroll = 0
+				return m, m.detailCmd()
+			}
 		}
 	}
 	return m, nil

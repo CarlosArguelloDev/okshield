@@ -26,6 +26,10 @@ func key(m Model, k string) Model {
 		msg = tea.KeyMsg{Type: tea.KeyTab}
 	case "esc":
 		msg = tea.KeyMsg{Type: tea.KeyEsc}
+	case "left":
+		msg = tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		msg = tea.KeyMsg{Type: tea.KeyRight}
 	default:
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 	}
@@ -35,16 +39,21 @@ func key(m Model, k string) Model {
 
 func TestKeybindingsSwitchViewsAndTabs(t *testing.T) {
 	tests := []struct {
-		keys     []string
-		wantView View
-		wantTab  Tab
+		keys      []string
+		wantView  View
+		wantTab   Tab
+		wantFocus Focus
 	}{
-		{[]string{"2"}, ViewNetworks, TabSummary},
-		{[]string{"3"}, ViewVolumes, TabSummary},
-		{[]string{"3", "1"}, ViewContainers, TabSummary},
-		{[]string{"d"}, ViewContainers, TabDiagnose},
-		{[]string{"d", "?"}, ViewContainers, TabSummary},
-		{[]string{"tab", "tab"}, ViewContainers, TabLogs},
+		{[]string{"2"}, ViewNetworks, TabSummary, FocusSidebar},
+		{[]string{"3"}, ViewVolumes, TabSummary, FocusSidebar},
+		{[]string{"3", "1"}, ViewContainers, TabSummary, FocusSidebar},
+		{[]string{"d"}, ViewContainers, TabDiagnose, FocusSidebar},
+		{[]string{"d", "?"}, ViewContainers, TabSummary, FocusSidebar},
+		{[]string{"right", "right"}, ViewContainers, TabLogs, FocusSidebar},
+		{[]string{"right", "left"}, ViewContainers, TabSummary, FocusSidebar},
+		{[]string{"tab"}, ViewContainers, TabSummary, FocusMain},
+		{[]string{"tab", "tab"}, ViewContainers, TabSummary, FocusProcesses},
+		{[]string{"tab", "tab", "tab"}, ViewContainers, TabSummary, FocusMetadata},
 	}
 	for _, tt := range tests {
 		t.Run(strings.Join(tt.keys, ","), func(t *testing.T) {
@@ -52,8 +61,9 @@ func TestKeybindingsSwitchViewsAndTabs(t *testing.T) {
 			for _, k := range tt.keys {
 				m = key(m, k)
 			}
-			if m.view != tt.wantView || m.tab != tt.wantTab {
-				t.Errorf("view=%v tab=%v, want view=%v tab=%v", m.view, m.tab, tt.wantView, tt.wantTab)
+			if m.view != tt.wantView || m.tab != tt.wantTab || m.focus != tt.wantFocus {
+				t.Errorf("view=%v tab=%v focus=%v, want view=%v tab=%v focus=%v",
+					m.view, m.tab, m.focus, tt.wantView, tt.wantTab, tt.wantFocus)
 			}
 		})
 	}
@@ -209,7 +219,7 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	}
 	model = key(model, "?") // back to TabSummary
 
-	model = key(model, "tab") // switch to TabDetails
+	model = key(model, "right") // switch to TabDetails using right arrow
 	view := model.View()
 	for _, want := range []string{"api", "worker", "8080", "172.17.0.2", "apidata", "128.0MB"} {
 		if !strings.Contains(view, want) {

@@ -40,15 +40,9 @@ func (m Model) renderPulse(maxLines int) string {
 		containers = filtered
 	}
 
-	linesUsed := 2
 	for idx, cp := range containers {
-		if linesUsed >= maxLines-2 {
-			b.WriteString(s.Muted.Render("…"))
-			break
-		}
 		if idx > 0 {
 			b.WriteByte('\n')
-			linesUsed++
 		}
 		badge := s.StatusBadge(HealthOK, GlyphRunning)
 		if !cp.Healthy {
@@ -66,24 +60,15 @@ func (m Model) renderPulse(maxLines int) string {
 			s.Muted.Render(fmt.Sprintf("CPU %4.1f%% · RAM %4.1f%% · logs %-3d (err:%d warn:%d)",
 				cp.CPUPercent, cp.MemPercent, cp.TotalLines, cp.ErrorCount, cp.WarnCount)),
 		)
-		linesUsed++
 
 		for _, a := range cp.Anomalies {
-			if linesUsed >= maxLines-1 {
-				break
-			}
 			b.WriteString("   " + s.StatusBadge(HealthDegraded, GlyphDegraded) + " " + s.Warn.Render(a) + "\n")
-			linesUsed++
 		}
 		for _, cl := range cp.TopClusters {
-			if linesUsed >= maxLines-1 {
-				break
-			}
 			if cl.Severity == summarizer.SevInfo && len(cp.Anomalies) == 0 && cp.ErrorCount > 0 {
 				continue
 			}
 			b.WriteString("   " + m.formatCluster(cl) + "\n")
-			linesUsed++
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -110,15 +95,12 @@ func (m Model) renderLogs(maxLines int) string {
 		return b.String()
 	}
 
-	limit := min(len(m.clusters), max(3, maxLines/2))
-	for i := 0; i < limit; i++ {
+	for i := 0; i < len(m.clusters); i++ {
 		b.WriteString("  " + m.formatCluster(m.clusters[i]) + "\n")
 	}
 
 	b.WriteString("\n" + s.Title.Render("Últimas líneas (Ring Buffer)") + "\n")
-	rem := max(2, maxLines-limit-4)
-	start := max(0, len(m.logs)-rem)
-	for _, line := range m.logs[start:] {
+	for _, line := range m.logs {
 		b.WriteString("  " + s.Muted.Render(truncate(line, max(20, m.width-40))) + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
