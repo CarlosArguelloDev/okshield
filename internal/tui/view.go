@@ -39,10 +39,10 @@ func (m Model) View() string {
 }
 
 func (m Model) renderTopRow(h int) string {
-	sideW := max(minSidebarW, m.width/5)
+	sideW := max(minSidebarW, m.width/6)
 	remW := max(20, m.width-sideW)
-	browserW := remW * 42 / 100
-	inspectorW := remW - browserW
+	browserW := max(24, remW*26/100)
+	inspectorW := max(20, remW-browserW)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		m.renderSidebar(sideW, h),
@@ -52,11 +52,7 @@ func (m Model) renderTopRow(h int) string {
 }
 
 func (m Model) renderBottomRow(h int) string {
-	sideW := max(minSidebarW, m.width/5)
-	remW := max(20, m.width-sideW)
-	browserW := remW * 42 / 100
-
-	w1 := sideW + browserW
+	w1 := m.width / 2
 	w2 := m.width - w1
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
