@@ -61,9 +61,12 @@ func TestKeybindingsSwitchViewsAndTabs(t *testing.T) {
 
 func TestCommandBarDispatch(t *testing.T) {
 	m := sized(t)
-	m = key(m, "/") // focus command bar, prefilled with "/"
+	m = key(m, "/") // focus command bar, prefilled with "/" and opens help modal
 	if m.focus != FocusCommand {
 		t.Fatalf("focus = %v, want FocusCommand", m.focus)
+	}
+	if !strings.Contains(m.View(), "Comandos Disponibles") || !strings.Contains(m.View(), "Descripción y Detalles") {
+		t.Errorf("pressing / should open command help modal with available commands and descriptions")
 	}
 	m = key(m, "volumes")
 	m = key(m, "enter")

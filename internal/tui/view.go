@@ -19,7 +19,7 @@ func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "iniciando okshield…"
 	}
-	if m.showHelp {
+	if m.focus == FocusCommand || m.showHelp {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderHelp())
 	}
 	if m.showOtel {
@@ -393,20 +393,54 @@ func truncate(str string, w int) string {
 func (m Model) renderHelp() string {
 	s := m.styles
 	var b strings.Builder
+
 	b.WriteString(s.Title.Render("Comandos de OkShield"))
 	b.WriteString("\n\n")
+
+	if m.focus == FocusCommand {
+		b.WriteString(s.Key.Render("Comando: ") + m.input.View())
+		b.WriteString("\n\n")
+	}
+
+	b.WriteString(m.sectionDivider("Comandos Disponibles", 62) + "\n")
+	matches := Suggest(m.input.Value())
+	matchSet := make(map[string]bool, len(matches))
+	for _, u := range matches {
+		matchSet[u] = true
+	}
+
+	var avail []string
+	for _, c := range commandTable {
+		cmdName := firstField(c.Usage)
+		if m.focus == FocusCommand && m.input.Value() != "" && m.input.Value() != "/" && matchSet[c.Usage] {
+			avail = append(avail, s.StatusBadge(HealthInfo, " "+cmdName+" "))
+		} else {
+			avail = append(avail, s.Key.Render(cmdName))
+		}
+	}
+	b.WriteString("  " + strings.Join(avail, s.Muted.Render("  ·  ")) + "\n\n")
+
+	b.WriteString(m.sectionDivider("Descripción y Detalles", 62) + "\n")
 	for _, c := range commandTable {
 		key := c.Key
 		if key == "" {
 			key = "-"
 		}
-		fmt.Fprintf(&b, "%s  %s  %s\n",
-			s.Selected.Render(fmt.Sprintf("%-24s", c.Usage)),
+		usageStyle := s.Selected
+		if m.focus == FocusCommand && m.input.Value() != "" && m.input.Value() != "/" && !matchSet[c.Usage] {
+			usageStyle = s.Muted
+		}
+		fmt.Fprintf(&b, "  %s  %s  %s\n",
+			usageStyle.Render(fmt.Sprintf("%-22s", c.Usage)),
 			s.Warn.Render(fmt.Sprintf("%-7s", key)),
 			s.Text.Render(c.Summary))
 	}
 	b.WriteString("\n")
-	b.WriteString(s.Muted.Render("pulsa cualquier tecla para cerrar"))
+	if m.focus == FocusCommand {
+		b.WriteString(s.Muted.Render("enter ejecutar  ·  tab autocompletar  ·  esc cerrar"))
+	} else {
+		b.WriteString(s.Muted.Render("pulsa cualquier tecla para cerrar"))
+	}
 	return s.Overlay.Render(b.String())
 }
 
