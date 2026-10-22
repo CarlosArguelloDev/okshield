@@ -29,10 +29,14 @@ func (m Model) renderPulse(maxLines int) string {
 	}
 
 	linesUsed := 2
-	for _, cp := range rep.Containers {
+	for idx, cp := range rep.Containers {
 		if linesUsed >= maxLines-2 {
 			b.WriteString(s.Muted.Render("…"))
 			break
+		}
+		if idx > 0 {
+			b.WriteByte('\n')
+			linesUsed++
 		}
 		badge := s.StatusBadge(HealthOK, GlyphRunning)
 		if !cp.Healthy {
@@ -44,11 +48,10 @@ func (m Model) renderPulse(maxLines int) string {
 				badge = s.StatusBadge(HealthDegraded, GlyphDegraded)
 			}
 		}
-		fmt.Fprintf(&b, "%s %s %s  %s\n",
+		fmt.Fprintf(&b, "%s  %s  %s\n",
 			badge,
-			s.Selected.Render(cp.Name),
-			s.Muted.Render("("+cp.Image+")"),
-			s.Muted.Render(fmt.Sprintf("CPU %.1f%% · RAM %.1f%% · logs %d (err:%d warn:%d)",
+			s.Selected.Render(fmt.Sprintf("%-16s", cp.Name)),
+			s.Muted.Render(fmt.Sprintf("CPU %4.1f%% · RAM %4.1f%% · logs %-3d (err:%d warn:%d)",
 				cp.CPUPercent, cp.MemPercent, cp.TotalLines, cp.ErrorCount, cp.WarnCount)),
 		)
 		linesUsed++
