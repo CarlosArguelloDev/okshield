@@ -16,11 +16,11 @@ func (m Model) renderPulse(maxLines int) string {
 	}
 	rep := m.pulse
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s  %s %d running   %s %d degraded   %s %d failed\n\n",
+	fmt.Fprintf(&b, "%s  %s %d   %s %d   %s %d\n\n",
 		s.Title.Render("Pulso Determinista (/whatsup)"),
-		s.StatusGlyph(HealthOK), rep.Running,
-		s.StatusGlyph(HealthDegraded), rep.Degraded,
-		s.StatusGlyph(HealthError), rep.Failed,
+		s.StatusBadge(HealthOK, GlyphRunning), rep.Running,
+		s.StatusBadge(HealthDegraded, GlyphDegraded), rep.Degraded,
+		s.StatusBadge(HealthError, GlyphDown), rep.Failed,
 	)
 
 	if len(rep.Containers) == 0 {
@@ -34,16 +34,18 @@ func (m Model) renderPulse(maxLines int) string {
 			b.WriteString(s.Muted.Render("…"))
 			break
 		}
-		h := HealthOK
+		badge := s.StatusBadge(HealthOK, GlyphRunning)
 		if !cp.Healthy {
-			if cp.State == "exited" || cp.OOMKilled || cp.ExitCode != 0 {
-				h = HealthError
+			if cp.OOMKilled {
+				badge = s.StatusBadge(HealthError, GlyphError)
+			} else if cp.State == "exited" || cp.ExitCode != 0 {
+				badge = s.StatusBadge(HealthError, GlyphDown)
 			} else {
-				h = HealthDegraded
+				badge = s.StatusBadge(HealthDegraded, GlyphDegraded)
 			}
 		}
 		fmt.Fprintf(&b, "%s %s %s  %s\n",
-			s.StatusGlyph(h),
+			badge,
 			s.Selected.Render(cp.Name),
 			s.Muted.Render("("+cp.Image+")"),
 			s.Muted.Render(fmt.Sprintf("CPU %.1f%% · RAM %.1f%% · logs %d (err:%d warn:%d)",
@@ -55,7 +57,7 @@ func (m Model) renderPulse(maxLines int) string {
 			if linesUsed >= maxLines-1 {
 				break
 			}
-			b.WriteString("   " + s.Warn.Render("⚡ "+a) + "\n")
+			b.WriteString("   " + s.StatusBadge(HealthDegraded, GlyphDegraded) + " " + s.Warn.Render(a) + "\n")
 			linesUsed++
 		}
 		for _, cl := range cp.TopClusters {
@@ -124,13 +126,15 @@ func (m Model) renderDiagnose() string {
 	}
 
 	var b strings.Builder
-	badgeStyle := s.Err
+	diagHealth := HealthError
 	if diag.Category == diagnose.CatHealthy {
-		badgeStyle = s.OK
+		diagHealth = HealthOK
+	} else if diag.Category == diagnose.CatCPUThrottling {
+		diagHealth = HealthDegraded
 	}
 	fmt.Fprintf(&b, "%s  %s  %s\n\n",
 		s.Title.Render("Diagnóstico: "+diag.Container),
-		badgeStyle.Render(fmt.Sprintf("[%s / %s]", diag.Category, diag.FaultLabel)),
+		s.StatusBadge(diagHealth, fmt.Sprintf(" %s · %s ", diag.Category, diag.FaultLabel)),
 		s.Muted.Render(fmt.Sprintf("confianza %.0f%%", diag.Confidence*100)),
 	)
 
@@ -169,9 +173,9 @@ func (m Model) renderOtelStatus() string {
 	var b strings.Builder
 	b.WriteString(s.Title.Render("Estado de Telemetría OTLP & DuckDB") + "\n\n")
 	k := kv{b: &b, s: s}
-	stateStr := s.Warn.Render("inactivo")
+	stateStr := s.StatusBadge(HealthError, GlyphDown) + " " + s.Warn.Render("inactivo")
 	if st.Listening {
-		stateStr = s.OK.Render("activo (escuchando)")
+		stateStr = s.StatusBadge(HealthOK, GlyphOK) + " " + s.OK.Render("escuchando")
 	}
 	k.row("receptor", stateStr)
 	k.row("OTLP gRPC", st.GRPCAddr)
@@ -187,14 +191,18 @@ func (m Model) renderOtelStatus() string {
 
 func (m Model) formatCluster(cl summarizer.LogCluster) string {
 	s := m.styles
-	var tag string
+	var badge string
+	var count string
 	switch cl.Severity {
 	case summarizer.SevError:
-		tag = s.Err.Render(fmt.Sprintf("[ERROR] x%d:", cl.Count))
+		badge = s.StatusBadge(HealthError, GlyphError)
+		count = s.Err.Render(fmt.Sprintf("x%d:", cl.Count))
 	case summarizer.SevWarn:
-		tag = s.Warn.Render(fmt.Sprintf("[WARN]  x%d:", cl.Count))
+		badge = s.StatusBadge(HealthDegraded, GlyphDegraded)
+		count = s.Warn.Render(fmt.Sprintf("x%d:", cl.Count))
 	default:
-		tag = s.OK.Render(fmt.Sprintf("[INFO]  x%d:", cl.Count))
+		badge = s.StatusBadge(HealthInfo, GlyphInfo)
+		count = s.OK.Render(fmt.Sprintf("x%d:", cl.Count))
 	}
-	return tag + " " + s.Text.Render(cl.Template)
+	return badge + " " + count + " " + s.Text.Render(cl.Template)
 }

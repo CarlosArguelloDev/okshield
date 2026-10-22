@@ -46,14 +46,19 @@ func (m Model) renderDetails() string {
 
 func (m Model) containerDetails(k kv, c docker.Container) {
 	s := m.styles
-	k.b.WriteString(s.StatusGlyph(containerHealth(c)) + " " + s.Title.Render(c.Name) + s.Muted.Render("  "+c.ShortID()) + "\n")
+	h := containerHealth(c)
+	badge := s.StatusGlyph(h)
+	if h == HealthError {
+		badge = s.StatusBadge(HealthError, GlyphDown)
+	}
+	k.b.WriteString(badge + " " + s.Title.Render(c.Name) + s.Muted.Render("  "+c.ShortID()) + "\n")
 	k.row("imagen", c.Image)
 	k.row("estado", c.Status)
 
 	d := m.detail
 	if d.ID == c.ID {
 		if d.OOMKilled {
-			k.row("OOMKilled", s.Err.Render("sí"))
+			k.row("OOMKilled", s.StatusBadge(HealthError, GlyphError)+" sí")
 		}
 		if !d.Running && !d.StartedAt.IsZero() {
 			k.row("exit code", strconv.Itoa(d.ExitCode))
@@ -115,7 +120,7 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 }
 
 func (m Model) networkDetails(k kv, n docker.Network) {
-	k.b.WriteString(m.styles.Title.Render(n.Name) + "\n")
+	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " NET ") + " " + m.styles.Title.Render(n.Name) + "\n")
 	k.row("driver", n.Driver)
 	k.row("scope", n.Scope)
 	k.row("interna", strconv.FormatBool(n.Internal))
@@ -138,7 +143,7 @@ func (m Model) networkDetails(k kv, n docker.Network) {
 }
 
 func (m Model) volumeDetails(k kv, v docker.Volume) {
-	k.b.WriteString(m.styles.Title.Render(v.Name) + "\n")
+	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " VOL ") + " " + m.styles.Title.Render(v.Name) + "\n")
 	k.row("driver", v.Driver)
 	k.row("scope", v.Scope)
 	k.row("mountpoint", v.Mountpoint)
