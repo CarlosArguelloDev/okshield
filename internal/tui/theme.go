@@ -16,13 +16,13 @@ var (
 	ColorSidebar   = lipgloss.Color("#E08A3C") // warm amber/orange: sidebar border
 	ColorSecondary = lipgloss.Color("#5C6370") // muted slate gray: inactive panel border
 	ColorAccent    = lipgloss.Color("#8EC07C") // sage aqua/green: headers & active cursor
-	ColorSection   = lipgloss.Color("#FABD2F") // warm gold: sidebar section titles & brand
+	ColorSection   = lipgloss.Color("#E06C75") // warm coral: sidebar section headers
 	ColorKey       = lipgloss.Color("#61AFEF") // soft sky blue: keybinding labels
 	ColorOK        = lipgloss.Color("#98C379") // soft sage green
 	ColorWarn      = lipgloss.Color("#E5C07B") // warm wheat/gold
 	ColorErr       = lipgloss.Color("#E06C75") // soft terracotta red
 	ColorText      = lipgloss.Color("#EBDBB2") // warm cream text
-	ColorMuted     = lipgloss.Color("#928374") // warm stone gray muted text
+	ColorMuted     = lipgloss.Color("#7C6F64") // warm gray-brown muted text
 	ColorSurface   = lipgloss.Color("#1D2021") // deep warm charcoal
 )
 

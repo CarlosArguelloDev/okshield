@@ -73,10 +73,9 @@ func (m Model) sectionDivider(title string, innerW int) string {
 func (m Model) renderSidebar(w, h int) string {
 	s := m.styles
 	innerW := max(8, w-2)
-	innerH := max(6, h-2)
+	var b strings.Builder
 
-	var top strings.Builder
-	top.WriteString("  " + s.Section.Render("⛨ OkShield") + "\n\n")
+	b.WriteString("  " + s.Title.Render("⛨ OkShield") + "\n\n")
 
 	icons := [...]string{"🐳", "⇄ ", "▣ "}
 	for i := View(0); i <= ViewVolumes; i++ {
@@ -86,11 +85,11 @@ func (m Model) renderSidebar(w, h int) string {
 			cursor = s.Title.Render("> ")
 			style = s.Selected
 		}
-		fmt.Fprintf(&top, "%s%s %s\n", cursor, icons[i], style.Render(i.String()))
+		fmt.Fprintf(&b, "%s%s %s\n", cursor, icons[i], style.Render(i.String()))
 	}
 
-	top.WriteByte('\n')
-	top.WriteString(m.sectionDivider("Pinned", innerW) + "\n")
+	b.WriteByte('\n')
+	b.WriteString(m.sectionDivider("Pinned", innerW) + "\n")
 	for idx, t := range tabNames {
 		cursor := "  "
 		st := s.Text
@@ -98,17 +97,17 @@ func (m Model) renderSidebar(w, h int) string {
 			cursor = s.Title.Render("> ")
 			st = s.Selected
 		}
-		fmt.Fprintf(&top, "%s%s\n", cursor, st.Render(t))
+		fmt.Fprintf(&b, "%s%s\n", cursor, st.Render(t))
 	}
 
-	top.WriteByte('\n')
-	top.WriteString(m.sectionDivider("Host", innerW) + "\n")
-	fmt.Fprintf(&top, "  %s %s\n", s.Muted.Render("host"), s.Text.Render(truncate(m.hostname, max(4, innerW-9))))
-	fmt.Fprintf(&top, "  %s %s  %s %s\n",
+	b.WriteByte('\n')
+	b.WriteString(m.sectionDivider("Host", innerW) + "\n")
+	fmt.Fprintf(&b, "  %s %s\n", s.Muted.Render("host"), s.Text.Render(truncate(m.hostname, max(4, innerW-9))))
+	fmt.Fprintf(&b, "  %s %s  %s %s\n",
 		s.Muted.Render("dkr"), m.connGlyph(m.docker),
 		s.Muted.Render("otlp"), m.connGlyph(m.otel),
 	)
-	fmt.Fprintf(&top, "  %s %s", s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)))
+	fmt.Fprintf(&b, "  %s %s\n\n", s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)))
 
 	controls := [][2]string{
 		{"↑/↓", "Scroll"},
@@ -120,32 +119,14 @@ func (m Model) renderSidebar(w, h int) string {
 		{"/", "Command"},
 		{"q", "Quit"},
 	}
-
-	var bot strings.Builder
-	bot.WriteString(m.sectionDivider("Controls", innerW) + "\n")
 	for i, kv := range controls {
-		fmt.Fprintf(&bot, "  %s %s",
+		fmt.Fprintf(&b, "  %s %s",
 			s.Key.Render(fmt.Sprintf("%-7s", kv[0])),
 			s.Muted.Render(kv[1]),
 		)
 		if i < len(controls)-1 {
-			bot.WriteByte('\n')
+			b.WriteByte('\n')
 		}
-	}
-
-	topStr := top.String()
-	botStr := bot.String()
-	topLines := strings.Count(topStr, "\n") + 1
-	botLines := strings.Count(botStr, "\n") + 1
-
-	var full strings.Builder
-	full.WriteString(topStr)
-	if gap := innerH - topLines - botLines; gap > 0 {
-		full.WriteString(strings.Repeat("\n", gap+1))
-		full.WriteString(botStr)
-	} else {
-		full.WriteString("\n\n")
-		full.WriteString(botStr)
 	}
 
 	borderColor := ColorSidebar
@@ -156,8 +137,7 @@ func (m Model) renderSidebar(w, h int) string {
 		Width:       w,
 		Height:      h,
 		BorderColor: borderColor,
-		TopTitle:    "OkShield",
-		Body:        full.String(),
+		Body:        b.String(),
 	})
 }
 
