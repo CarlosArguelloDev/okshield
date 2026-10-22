@@ -52,14 +52,16 @@ func (m Model) renderTopRow(h int) string {
 }
 
 func (m Model) renderBottomRow(h int) string {
-	w1 := m.width / 3
-	w2 := m.width / 3
-	w3 := m.width - w1 - w2
+	sideW := max(minSidebarW, m.width/5)
+	remW := max(20, m.width-sideW)
+	browserW := remW * 42 / 100
+
+	w1 := sideW + browserW
+	w2 := m.width - w1
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		m.renderProcessesBox(w1, h),
 		m.renderMetadataBox(w2, h),
-		m.renderCommandBox(w3, h),
 	)
 }
 
@@ -172,7 +174,7 @@ func (m Model) renderBrowser(w, h int) string {
 		BorderColor: borderColor,
 		Header:      header,
 		Body:        body,
-		FootBadges:  []string{"👁 Browser", fmt.Sprintf("%d/%d", pos, total)},
+		FootBadges:  []string{"Browser", fmt.Sprintf("%d/%d", pos, total)},
 	})
 }
 
@@ -211,7 +213,7 @@ func (m Model) renderInspector(w, h int) string {
 		BorderColor: borderColor,
 		Header:      header,
 		Body:        body,
-		FootBadges:  []string{"👁 " + m.tab.String(), fmt.Sprintf("%d/%d", int(m.tab)+1, int(tabCount))},
+		FootBadges:  []string{m.tab.String(), fmt.Sprintf("%d/%d", int(m.tab)+1, int(tabCount))},
 	})
 }
 
@@ -304,34 +306,6 @@ func (m Model) renderMetadataBox(w, h int) string {
 		TopTitle:    "Metadata",
 		Body:        strings.TrimRight(b.String(), "\n"),
 		FootBadges:  []string{fmt.Sprintf("%d/%d", min(1, fields), fields)},
-	})
-}
-
-func (m Model) renderCommandBox(w, h int) string {
-	s := m.styles
-	var b strings.Builder
-	if m.focus == FocusCommand {
-		b.WriteString(m.input.View() + "\n")
-		if sug := Suggest(m.input.Value()); len(sug) > 0 {
-			b.WriteString(s.Muted.Render("↪ " + strings.Join(sug, " · ")))
-		}
-	} else {
-		b.WriteString(s.Title.Render("> ") + s.Text.Render(m.status) + "\n")
-		b.WriteString(s.Muted.Render("/ comando · ? whatsup · d diagnose\n"))
-		b.WriteString(s.Muted.Render("1/2/3 vistas · tab pestañas · q salir"))
-	}
-
-	borderColor := ColorSecondary
-	if m.focus == FocusCommand {
-		borderColor = ColorFocus
-	}
-	return renderBox(boxSpec{
-		Width:       w,
-		Height:      h,
-		BorderColor: borderColor,
-		TopTitle:    "Command",
-		Body:        strings.TrimRight(b.String(), "\n"),
-		FootBadges:  []string{"mem " + humanBytes(m.memAlloc)},
 	})
 }
 
