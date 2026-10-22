@@ -17,13 +17,20 @@ func TestStatusGlyph(t *testing.T) {
 		{"ok", HealthOK, GlyphRunning},
 		{"degraded", HealthDegraded, GlyphDegraded},
 		{"error", HealthError, GlyphError},
+		{"info", HealthInfo, GlyphInfo},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := s.StatusGlyph(tt.h); !strings.Contains(got, tt.want) {
-				t.Errorf("StatusGlyph(%v) = %q, want glyph %q", tt.h, got, tt.want)
+				t.Errorf("StatusGlyph(%v) = %q, want badge %q", tt.h, got, tt.want)
 			}
 		})
+	}
+	if got := s.StatusBadge(HealthOK, GlyphOK); !strings.Contains(got, " OK ") {
+		t.Errorf("StatusBadge(OK) = %q, want ' OK '", got)
+	}
+	if got := s.StatusBadge(HealthError, GlyphDown); !strings.Contains(got, " DOWN ") {
+		t.Errorf("StatusBadge(DOWN) = %q, want ' DOWN '", got)
 	}
 }
 

@@ -24,13 +24,24 @@ var (
 	ColorText      = lipgloss.Color("#EBDBB2") // warm cream text
 	ColorMuted     = lipgloss.Color("#7C6F64") // warm gray-brown muted text
 	ColorSurface   = lipgloss.Color("#1D2021") // deep warm charcoal
+
+	// Solid pill-badge colors (AGENTS.md §6).
+	ColorBadgeOK   = lipgloss.Color("#06D6A0") // green background (dark text)
+	ColorBadgeWarn = lipgloss.Color("#FFD166") // amber background (dark text)
+	ColorBadgeErr  = lipgloss.Color("#EF476F") // coral red background (white text)
+	ColorBadgeInfo = lipgloss.Color("#00F5D4") // cyan background (dark text)
+	ColorBadgeDark = lipgloss.Color("#1D2021") // dark contrast text for OK/WARN/INFO
+	ColorBadgeLite = lipgloss.Color("#FFFFFF") // white contrast text for ERR/DOWN
 )
 
-// Status glyphs (AGENTS.md §6).
+// Pill-style status badge labels (AGENTS.md §6).
 const (
-	GlyphRunning  = "●"
-	GlyphDegraded = "◐"
-	GlyphError    = "✖"
+	GlyphRunning  = " RUN "
+	GlyphOK       = " OK "
+	GlyphDegraded = " WARN "
+	GlyphError    = " ERR "
+	GlyphDown     = " DOWN "
+	GlyphInfo     = " INFO "
 )
 
 // Styles groups every reusable lipgloss style so views never build styles in
@@ -54,6 +65,11 @@ type Styles struct {
 	OK   lipgloss.Style
 	Warn lipgloss.Style
 	Err  lipgloss.Style
+
+	BadgeOK   lipgloss.Style
+	BadgeWarn lipgloss.Style
+	BadgeErr  lipgloss.Style
+	BadgeInfo lipgloss.Style
 }
 
 // DefaultStyles builds the warm Superfile-inspired OkShield theme.
@@ -85,27 +101,51 @@ func DefaultStyles() Styles {
 		OK:   lipgloss.NewStyle().Foreground(ColorOK),
 		Warn: lipgloss.NewStyle().Foreground(ColorWarn),
 		Err:  lipgloss.NewStyle().Foreground(ColorErr),
+
+		BadgeOK:   lipgloss.NewStyle().Foreground(ColorBadgeDark).Background(ColorBadgeOK).Bold(true),
+		BadgeWarn: lipgloss.NewStyle().Foreground(ColorBadgeDark).Background(ColorBadgeWarn).Bold(true),
+		BadgeErr:  lipgloss.NewStyle().Foreground(ColorBadgeLite).Background(ColorBadgeErr).Bold(true),
+		BadgeInfo: lipgloss.NewStyle().Foreground(ColorBadgeDark).Background(ColorBadgeInfo).Bold(true),
 	}
 }
 
-// Health is the minimal status classification used by status glyphs.
+// Health is the minimal status classification used by status badges.
 type Health int
 
 const (
 	HealthOK Health = iota
 	HealthDegraded
 	HealthError
+	HealthInfo
 )
 
-// StatusGlyph renders the colored glyph for a health state.
+// StatusGlyph renders the default pill-style badge (` RUN `, ` WARN `, ` ERR `, ` INFO `)
+// for a health state.
 func (s Styles) StatusGlyph(h Health) string {
 	switch h {
 	case HealthDegraded:
-		return s.Warn.Render(GlyphDegraded)
+		return s.BadgeWarn.Render(GlyphDegraded)
 	case HealthError:
-		return s.Err.Render(GlyphError)
+		return s.BadgeErr.Render(GlyphError)
+	case HealthInfo:
+		return s.BadgeInfo.Render(GlyphInfo)
 	default:
-		return s.OK.Render(GlyphRunning)
+		return s.BadgeOK.Render(GlyphRunning)
+	}
+}
+
+// StatusBadge renders a pill-style badge with a custom compact label
+// (e.g. ` OK `, ` DOWN `, ` OOM `).
+func (s Styles) StatusBadge(h Health, label string) string {
+	switch h {
+	case HealthDegraded:
+		return s.BadgeWarn.Render(label)
+	case HealthError:
+		return s.BadgeErr.Render(label)
+	case HealthInfo:
+		return s.BadgeInfo.Render(label)
+	default:
+		return s.BadgeOK.Render(label)
 	}
 }
 
