@@ -80,10 +80,14 @@ Dado que OkShield corre incluso en SBCs como Raspberry Pi:
 
 ---
 
-## 6. Guía de Estilo Visual (Antigravity CLI Inspired)
-- Usar `lipgloss.RoundedBorder()` para paneles y modales superpuestos.
-- Mostrar indicadores de estado minimalistas: `●` (Verde = Running), `◐` (Ámbar = Degraded/High Resource), `✖` (Rojo = Exited/Error).
-- En la esquina superior derecha de la TUI, mostrar siempre un pequeño badge con la memoria actual consumida por OkShield (`runtime.MemStats.Alloc`).
+## 6. Guía de Estilo Visual (Superfile & Antigravity CLI Inspired)
+- Usar bordes estilizados con títulos y contadores incrustados en los marcos y `lipgloss.RoundedBorder()` para modales superpuestos.
+- **Sistema de Labels / Badges de Estado (tipo píldora):** Reemplazar glifos sueltos por etiquetas rectangulares compactas con fondo de color sólido y texto en negrita de alto contraste:
+  - **` OK ` / ` RUN `**: Fondo verde (`#06D6A0`) con texto oscuro (`#1D2021`) para contenedores activos y sistemas sanos.
+  - **` WARN `**: Fondo ámbar (`#FFD166`) con texto oscuro (`#1D2021`) para advertencias o recursos degradados.
+  - **` ERR ` / ` DOWN `**: Fondo rojo coral (`#EF476F`) con texto blanco (`#FFFFFF`) para errores críticos, caídas o `OOMKilled`.
+  - **` INFO `**: Fondo cian/azul (`#00F5D4`) con texto oscuro (`#1D2021`) para estados informativos.
+- Mostrar siempre el consumo de memoria actual de OkShield (`runtime.MemStats.Alloc`) en la interfaz.
 
 ---
 
