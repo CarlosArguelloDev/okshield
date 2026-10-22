@@ -102,8 +102,7 @@ func Classify(in summarizer.ContainerInput) Diagnosis {
 	}
 
 	// 3. DEPENDENCY_TIMEOUT (DB/Cache connection refused or upstream deadlock)
-	if containsAny(joined, "connection refused", "econnrefused", "deadlock", "too many clients", "redis", "postgres", "mysql", "dial tcp") &&
-		containsAny(joined, "refused", "timeout", "deadlock", "unreachable", "failed to connect") {
+	if containsAny(joined, "connection refused", "econnrefused", "deadlock", "too many clients") {
 		return Diagnosis{
 			Container:     name,
 			Category:      CatDependencyTimeout,
@@ -113,7 +112,7 @@ func Classify(in summarizer.ContainerInput) Diagnosis {
 			WhyItHappened: "El servicio destino (PostgreSQL/Redis/upstream) está caído, no escucha en la interfaz correcta o está en una red Docker distinta.",
 			RootCauseTree: []string{
 				fmt.Sprintf("├─ Reinicios: %d (ExitCode=%d)", d.RestartCount, d.ExitCode),
-				"├─ Patrón de log: Connection refused / upstream timeout hacia <IP>:<PORT>",
+				"├─ Patrón de log: Connection refused / upstream deadlock hacia <IP>:<PORT>",
 				"└─ Clasificación: DEPENDENCY_TIMEOUT [DBConnectionRefused]",
 			},
 			Runbook: []string{
@@ -125,8 +124,7 @@ func Classify(in summarizer.ContainerInput) Diagnosis {
 	}
 
 	// 4. NETWORK_UNREACHABLE (DNS lookup failure, network timeout, bridge isolation)
-	if containsAny(joined, "i/o timeout", "network is unreachable", "no such host", "temporary failure in name resolution", "etimedout", "context deadline exceeded", "connection timed out") ||
-		(len(d.Networks) == 0 && d.Running) {
+	if containsAny(joined, "i/o timeout", "network is unreachable", "no such host", "temporary failure in name resolution", "etimedout", "context deadline exceeded", "connection timed out") {
 		return Diagnosis{
 			Container:     name,
 			Category:      CatNetworkUnreach,
