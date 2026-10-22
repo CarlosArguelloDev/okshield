@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/CarlosArguelloDev/okshield/internal/tui"
 	"github.com/CarlosArguelloDev/okshield/internal/version"
 )
 
@@ -19,7 +22,9 @@ func main() {
 		return
 	}
 
-	// The Bubble Tea program will be wired here in upcoming commits.
-	fmt.Fprintln(os.Stderr, "okshield: TUI not implemented yet (use -version)")
-	os.Exit(1)
+	p := tea.NewProgram(tui.New(), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "okshield:", err)
+		os.Exit(1)
+	}
 }
