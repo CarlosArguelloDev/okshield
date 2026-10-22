@@ -1,0 +1,48 @@
+# --- Secrets & local environment (NEVER commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+
+# --- Go build artifacts ---
+/bin/
+/dist/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.*
+*.prof
+/okshield
+/okshield-*
+
+# --- Go workspace / vendoring ---
+go.work
+go.work.sum
+/vendor/
+
+# --- Telemetry data (DuckDB local stores) ---
+*.duckdb
+*.duckdb.wal
+*.db
+*.db-wal
+/data/
+
+# --- Logs & temp ---
+*.log
+/tmp/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
