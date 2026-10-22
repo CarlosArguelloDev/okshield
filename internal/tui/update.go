@@ -162,7 +162,7 @@ func (m Model) applyResources(msg resourcesMsg) (tea.Model, tea.Cmd) {
 	if hadPrev {
 		for i, c := range m.containers {
 			if c.ID == prev.ID {
-				m.cursor = i
+				m.cursor = i + 1
 				break
 			}
 		}
@@ -191,6 +191,14 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 			target = c.Args[0]
 		} else if sel, ok := m.selectedContainer(); ok {
 			target = sel.ID
+		} else if len(m.containers) > 0 {
+			target = m.containers[0].ID
+			for _, ct := range m.containers {
+				if containerHealth(ct) != HealthOK {
+					target = ct.ID
+					break
+				}
+			}
 		}
 		if target == "" {
 			m.status = "/diagnose: selecciona un contenedor o pasa su nombre"

@@ -39,9 +39,29 @@ func (m Model) renderDetails() string {
 	case ViewVolumes:
 		m.volumeDetails(k, m.volumes[m.cursor])
 	default:
-		m.containerDetails(k, m.containers[m.cursor])
+		if c, ok := m.selectedContainer(); ok {
+			m.containerDetails(k, c)
+		} else {
+			m.generalDetails(k)
+		}
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+func (m Model) generalDetails(k kv) {
+	s := m.styles
+	k.b.WriteString(s.StatusBadge(HealthInfo, " ALL ") + " " + s.Title.Render("Resumen General de Infraestructura") + "\n")
+	k.row("host", m.hostname)
+	k.row("contenedores", strconv.Itoa(len(m.containers)))
+	k.row("redes", strconv.Itoa(len(m.networks)))
+	k.row("volúmenes", strconv.Itoa(len(m.volumes)))
+
+	if len(m.containers) > 0 {
+		k.section("Contenedores")
+		for _, c := range m.containers {
+			k.row(c.Name, c.Image+" · "+c.Status)
+		}
+	}
 }
 
 func (m Model) containerDetails(k kv, c docker.Container) {

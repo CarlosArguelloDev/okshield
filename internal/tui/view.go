@@ -290,6 +290,13 @@ func (m Model) renderMetadataBox(w, h int) string {
 				row("Mount", c.Mounts[0].Destination)
 			}
 			fields = 5
+		} else if len(m.containers) > 0 {
+			row("Scope", "General (All)")
+			row("Host", m.hostname)
+			row("Containers", fmt.Sprintf("%d total", len(m.containers)))
+			row("Networks", fmt.Sprintf("%d redes", len(m.networks)))
+			row("Volumes", fmt.Sprintf("%d volúmenes", len(m.volumes)))
+			fields = 5
 		}
 	}
 	if fields == 0 {
@@ -365,7 +372,10 @@ func (m Model) listRow(i int) (string, string) {
 	case ViewVolumes:
 		return s.StatusBadge(HealthInfo, " VOL "), m.volumes[i].Name
 	default:
-		c := m.containers[i]
+		if i == 0 {
+			return s.StatusBadge(HealthInfo, " ALL "), "General"
+		}
+		c := m.containers[i-1]
 		h := containerHealth(c)
 		if h == HealthError {
 			return s.StatusBadge(HealthError, GlyphDown), c.Name

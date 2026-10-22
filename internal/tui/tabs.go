@@ -28,8 +28,20 @@ func (m Model) renderPulse(maxLines int) string {
 		return b.String()
 	}
 
+	containers := rep.Containers
+	if sel, ok := m.selectedContainer(); ok {
+		filtered := make([]summarizer.ContainerPulse, 0, 1)
+		for _, cp := range rep.Containers {
+			if cp.Name == sel.Name {
+				filtered = append(filtered, cp)
+				break
+			}
+		}
+		containers = filtered
+	}
+
 	linesUsed := 2
-	for idx, cp := range rep.Containers {
+	for idx, cp := range containers {
 		if linesUsed >= maxLines-2 {
 			b.WriteString(s.Muted.Render("…"))
 			break

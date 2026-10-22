@@ -186,16 +186,19 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	m, _ = model.Update(res)
 	model = m.(Model)
 
-	det := fetchDetail(context.Background(), fd, nil, "11111111111122222222")()
-	m, _ = model.Update(det)
-	model = m.(Model)
-
 	pmsg := runPulse(context.Background(), fd, fd.containers)()
 	m, _ = model.Update(pmsg)
 	model = m.(Model)
-	if !strings.Contains(model.View(), "Pulso Determinista") {
-		t.Errorf("summary view missing pulse header")
+	// Row 0 is "General" (all containers): summary must show both "api" and "worker".
+	if !strings.Contains(model.View(), "Pulso Determinista") || !strings.Contains(model.View(), "General") {
+		t.Errorf("summary view missing pulse header or General option")
 	}
+
+	// Move cursor down to row 1 ("api") and fetch its detail.
+	model = key(model, "j")
+	det := fetchDetail(context.Background(), fd, nil, "11111111111122222222")()
+	m, _ = model.Update(det)
+	model = m.(Model)
 
 	dmsg := runDiagnose(context.Background(), fd, "11111111111122222222")()
 	m, _ = model.Update(dmsg)

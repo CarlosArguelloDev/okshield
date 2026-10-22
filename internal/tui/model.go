@@ -177,6 +177,7 @@ func sampleMem() tea.Cmd {
 }
 
 // itemCount returns the number of rows in the active sidebar view.
+// In ViewContainers, row 0 is the "General" (all containers) option when containers exist.
 func (m Model) itemCount() int {
 	switch m.view {
 	case ViewNetworks:
@@ -184,16 +185,20 @@ func (m Model) itemCount() int {
 	case ViewVolumes:
 		return len(m.volumes)
 	default:
-		return len(m.containers)
+		if len(m.containers) == 0 {
+			return 0
+		}
+		return len(m.containers) + 1
 	}
 }
 
 // selectedContainer returns the highlighted container, if any.
+// Row 0 in ViewContainers represents "General" (all containers).
 func (m Model) selectedContainer() (docker.Container, bool) {
-	if m.view != ViewContainers || m.cursor < 0 || m.cursor >= len(m.containers) {
+	if m.view != ViewContainers || m.cursor <= 0 || m.cursor > len(m.containers) {
 		return docker.Container{}, false
 	}
-	return m.containers[m.cursor], true
+	return m.containers[m.cursor-1], true
 }
 
 // clampCursor keeps the cursor inside the active list.
