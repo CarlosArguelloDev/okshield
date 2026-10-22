@@ -398,9 +398,9 @@ func (m Model) listRow(i int) (string, string) {
 		c := m.containers[i]
 		h := containerHealth(c)
 		if h == HealthError {
-			return s.StatusBadge(HealthError, GlyphDown), c.Name + " · " + c.Image
+			return s.StatusBadge(HealthError, GlyphDown), c.Name
 		}
-		return s.StatusGlyph(h), c.Name + " · " + c.Image
+		return s.StatusGlyph(h), c.Name
 	}
 }
 
