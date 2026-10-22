@@ -77,7 +77,7 @@ func (m Model) renderSidebar(w, h int) string {
 	innerW := max(8, w-2)
 	var b strings.Builder
 
-	b.WriteString("  " + s.Title.Render("🛡️ OkShield") + "\n\n")
+	b.WriteString("  " + s.Title.Render("✦ OkShield") + "\n\n")
 
 	icons := [...]string{"🐳", "⇄ ", "▣ "}
 	for i := View(0); i <= ViewVolumes; i++ {
@@ -394,7 +394,7 @@ func (m Model) renderHelp() string {
 	s := m.styles
 	var b strings.Builder
 
-	b.WriteString(s.Title.Render("🛡️ Comandos de OkShield"))
+	b.WriteString(s.Title.Render("✦ Comandos de OkShield"))
 	b.WriteString("\n\n")
 
 	if m.focus == FocusCommand {
