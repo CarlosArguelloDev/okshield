@@ -22,6 +22,9 @@ func (m Model) View() string {
 	if m.showHelp {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderHelp())
 	}
+	if m.showOtel {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderOtelStatus())
+	}
 	bodyH := max(3, m.height-headerHeight-commandHeight-hintHeight)
 	return lipgloss.JoinVertical(lipgloss.Left,
 		m.renderHeader(),
@@ -168,24 +171,18 @@ func (m Model) renderMain(w, h int) string {
 		}
 	}
 	header := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
-	body := s.Muted.Render(m.tabPlaceholder())
-	if m.tab == TabDetails {
-		body = m.renderDetails()
-	}
-	return m.panel(m.focus == FocusMain, w, h, header+"\n\n"+body)
-}
-
-func (m Model) tabPlaceholder() string {
+	var body string
 	switch m.tab {
 	case TabSummary:
-		return "Pulsa ? o /whatsup para un resumen determinista (sin IA)."
+		body = m.renderPulse(h - 4)
 	case TabDetails:
-		return "Métricas en vivo, IPs, puertos, mounts y drivers del recurso seleccionado."
+		body = m.renderDetails()
 	case TabLogs:
-		return "Logs deduplicados en plantillas (ring buffer de 500 líneas)."
-	default:
-		return "Pulsa d o /diagnose [container] para clasificar la causa raíz."
+		body = m.renderLogs(h - 4)
+	case TabDiagnose:
+		body = m.renderDiagnose()
 	}
+	return m.panel(m.focus == FocusMain, w, h, header+"\n\n"+body)
 }
 
 func (m Model) renderCommandBar() string {

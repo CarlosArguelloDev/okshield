@@ -183,9 +183,25 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	m, _ = model.Update(res)
 	model = m.(Model)
 
-	det := fetchDetail(context.Background(), fd, "11111111111122222222")()
+	det := fetchDetail(context.Background(), fd, nil, "11111111111122222222")()
 	m, _ = model.Update(det)
 	model = m.(Model)
+
+	pmsg := runPulse(context.Background(), fd, fd.containers)()
+	m, _ = model.Update(pmsg)
+	model = m.(Model)
+	if !strings.Contains(model.View(), "Pulso Determinista") {
+		t.Errorf("summary view missing pulse header")
+	}
+
+	dmsg := runDiagnose(context.Background(), fd, "11111111111122222222")()
+	m, _ = model.Update(dmsg)
+	model = m.(Model)
+	model = key(model, "d")
+	if !strings.Contains(model.View(), "Diagnóstico:") {
+		t.Errorf("diagnose view missing header")
+	}
+	model = key(model, "?") // back to TabSummary
 
 	model = key(model, "tab") // switch to TabDetails
 	view := model.View()

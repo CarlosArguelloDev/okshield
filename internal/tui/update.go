@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -16,6 +17,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case memTickMsg:
 		m.memAlloc = msg.alloc
+		if m.receiver != nil {
+			if m.receiver.Stats().Listening {
+				m.otel = ConnUp
+			} else {
+				m.otel = ConnDown
+			}
+		}
 		return m, sampleMem()
 
 	case refreshTickMsg:
@@ -26,17 +34,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case detailMsg:
 		if c, ok := m.selectedContainer(); ok && c.ID == msg.id {
-			m.detail, m.detailErr = msg.detail, msg.err
+			m.detail, m.stats, m.logs, m.clusters, m.detailErr = msg.detail, msg.stats, msg.logs, msg.clusters, msg.err
 		}
+		return m, nil
+
+	case pulseMsg:
+		if msg.err != nil {
+			m.status = "/whatsup error: " + msg.err.Error()
+			return m, nil
+		}
+		m.pulse = msg.report
+		m.hasPulse = true
+		m.status = fmt.Sprintf("/whatsup listo · %d ok · %d warn · %d err",
+			msg.report.Running, msg.report.Degraded, msg.report.Failed)
+		return m, nil
+
+	case diagnoseMsg:
+		if msg.err != nil {
+			m.status = "/diagnose error: " + msg.err.Error()
+			return m, nil
+		}
+		m.diag = msg.diag
+		m.hasDiag = true
+		m.status = fmt.Sprintf("/diagnose %s → %s [%s]",
+			msg.diag.Container, msg.diag.Category, msg.diag.FaultLabel)
+		return m, nil
+
+	case pruneMsg:
+		m.status = fmt.Sprintf("/prune-telemetry: %d registros antiguos eliminados", msg.removed)
 		return m, nil
 
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		if m.showHelp {
-			// Any key closes the help overlay.
+		if m.showHelp || m.showOtel {
 			m.showHelp = false
+			m.showOtel = false
 			return m, nil
 		}
 		if m.focus == FocusCommand {
@@ -125,7 +159,6 @@ func (m Model) applyResources(msg resourcesMsg) (tea.Model, tea.Cmd) {
 	m.docker = ConnUp
 	m.containers, m.networks, m.volumes = msg.containers, msg.networks, msg.volumes
 
-	// Keep the same container selected across refreshes when it still exists.
 	if hadPrev {
 		for i, c := range m.containers {
 			if c.ID == prev.ID {
@@ -139,34 +172,49 @@ func (m Model) applyResources(msg resourcesMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if first {
 		m.status = fmt.Sprintf("docker conectado · %d contenedores", len(m.containers))
-		cmd = m.detailCmd()
+		cmd = tea.Batch(m.detailCmd(), runPulse(m.ctx, m.api, m.containers))
 	}
 	return m, tea.Batch(cmd, scheduleRefresh())
 }
 
-// dispatch executes a parsed command. Engines are wired in later commits;
-// for now commands switch views/tabs and report status.
+// dispatch executes a parsed command asynchronously.
 func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 	switch c.Kind {
 	case CmdWhatsup:
 		m.tab = TabSummary
-		m.status = "/whatsup: motor determinista pendiente de conectar"
+		m.status = "ejecutando resumen determinista (/whatsup)…"
+		return m, runPulse(m.ctx, m.api, m.containers)
 	case CmdDiagnose:
 		m.tab = TabDiagnose
-		target := "selección actual"
+		target := ""
 		if len(c.Args) > 0 {
 			target = c.Args[0]
+		} else if sel, ok := m.selectedContainer(); ok {
+			target = sel.ID
 		}
-		m.status = fmt.Sprintf("/diagnose %s: decision model pendiente de conectar", target)
+		if target == "" {
+			m.status = "/diagnose: selecciona un contenedor o pasa su nombre"
+			return m, nil
+		}
+		m.status = fmt.Sprintf("diagnosticando %s…", target)
+		return m, runDiagnose(m.ctx, m.api, target)
 	case CmdContainers, CmdNetworks, CmdVolumes:
 		m.view = View(c.Kind - CmdContainers)
 		m.cursor = 0
 		m.status = "vista: " + m.view.String()
 		return m, m.detailCmd()
 	case CmdOtelStatus:
-		m.status = "/otel status: receptor OTLP aún no iniciado"
+		m.showOtel = true
+		m.status = "/otel status"
 	case CmdPruneTelemetry:
-		m.status = "/prune-telemetry: DuckDB aún no inicializado"
+		if m.store == nil {
+			m.status = "/prune-telemetry: almacén no inicializado"
+			return m, nil
+		}
+		st := m.store
+		return m, func() tea.Msg {
+			return pruneMsg{removed: st.Prune(time.Now())}
+		}
 	case CmdHelp:
 		m.showHelp = true
 	case CmdQuit:

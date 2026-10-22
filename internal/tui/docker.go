@@ -6,7 +6,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
+	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
+	"github.com/CarlosArguelloDev/okshield/internal/telemetry"
 )
 
 // DockerAPI is the subset of the Docker client used by the TUI. It allows
@@ -16,6 +19,13 @@ type DockerAPI interface {
 	ListNetworks(ctx context.Context) ([]docker.Network, error)
 	ListVolumes(ctx context.Context) ([]docker.Volume, error)
 	InspectContainer(ctx context.Context, idOrName string) (docker.ContainerDetail, error)
+}
+
+// TelemetryAPI optionally exposes ContainerStats and ContainerLogs when the
+// underlying client supports them.
+type TelemetryAPI interface {
+	ContainerStats(ctx context.Context, idOrName string) (docker.Stats, error)
+	ContainerLogs(ctx context.Context, idOrName string, tail int) ([]string, error)
 }
 
 const (
@@ -31,11 +41,31 @@ type resourcesMsg struct {
 	err        error
 }
 
-// detailMsg carries the inspect result for the selected container.
+// detailMsg carries the inspect, stats and logs result for the selected container.
 type detailMsg struct {
-	id     string
-	detail docker.ContainerDetail
+	id       string
+	detail   docker.ContainerDetail
+	stats    docker.Stats
+	logs     []string
+	clusters []summarizer.LogCluster
+	err      error
+}
+
+// pulseMsg carries the deterministic /whatsup report across all containers.
+type pulseMsg struct {
+	report summarizer.Report
 	err    error
+}
+
+// diagnoseMsg carries the decision-model diagnosis for a container.
+type diagnoseMsg struct {
+	diag diagnose.Diagnosis
+	err  error
+}
+
+// pruneMsg reports how many warm-store telemetry rows were pruned.
+type pruneMsg struct {
+	removed int
 }
 
 // refreshTickMsg triggers the next periodic snapshot.
@@ -61,8 +91,9 @@ func fetchResources(parent context.Context, api DockerAPI) tea.Cmd {
 	}
 }
 
-// fetchDetail inspects a single container off the UI goroutine.
-func fetchDetail(parent context.Context, api DockerAPI, id string) tea.Cmd {
+// fetchDetail inspects a single container and, if supported, fetches its live
+// stats and tail logs off the UI goroutine.
+func fetchDetail(parent context.Context, api DockerAPI, store *telemetry.Store, id string) tea.Cmd {
 	if api == nil || id == "" {
 		return nil
 	}
@@ -70,7 +101,100 @@ func fetchDetail(parent context.Context, api DockerAPI, id string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(parent, requestTimeout)
 		defer cancel()
 		d, err := api.InspectContainer(ctx, id)
-		return detailMsg{id: id, detail: d, err: err}
+		msg := detailMsg{id: id, detail: d, err: err}
+		if err != nil {
+			return msg
+		}
+		if tel, ok := api.(TelemetryAPI); ok {
+			if d.Running {
+				msg.stats, _ = tel.ContainerStats(ctx, id)
+			}
+			if lines, lerr := tel.ContainerLogs(ctx, id, docker.MaxLogLines); lerr == nil {
+				msg.logs = lines
+				msg.clusters = summarizer.ClusterLogs(lines)
+				if store != nil && len(lines) > 0 {
+					last := lines[len(lines)-1]
+					sev, _ := summarizer.NormalizeLine(last)
+					store.Append(telemetry.LogRecord{
+						Timestamp: time.Now(),
+						Source:    d.Name,
+						Severity:  sev,
+						Body:      last,
+					})
+				}
+			}
+		}
+		return msg
+	}
+}
+
+// runPulse executes the deterministic /whatsup engine across all containers.
+func runPulse(parent context.Context, api DockerAPI, containers []docker.Container) tea.Cmd {
+	if api == nil {
+		return nil
+	}
+	list := append([]docker.Container(nil), containers...)
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(parent, 6*time.Second)
+		defer cancel()
+		if len(list) == 0 {
+			var err error
+			list, err = api.ListContainers(ctx)
+			if err != nil {
+				return pulseMsg{err: err}
+			}
+		}
+		inputs := make([]summarizer.ContainerInput, 0, len(list))
+		tel, hasTel := api.(TelemetryAPI)
+		for _, c := range list {
+			d, err := api.InspectContainer(ctx, c.ID)
+			if err != nil {
+				d = docker.ContainerDetail{Container: c, ExitCode: c.ExitCode(), Running: c.State == "running"}
+			}
+			var st docker.Stats
+			var logs []string
+			if hasTel {
+				if d.Running {
+					st, _ = tel.ContainerStats(ctx, c.ID)
+				}
+				logs, _ = tel.ContainerLogs(ctx, c.ID, 200)
+			}
+			inputs = append(inputs, summarizer.ContainerInput{
+				Detail: d,
+				Stats:  st,
+				Logs:   logs,
+			})
+		}
+		return pulseMsg{report: summarizer.Analyze(inputs, 5)}
+	}
+}
+
+// runDiagnose executes the decision-model classifier for a target container.
+func runDiagnose(parent context.Context, api DockerAPI, target string) tea.Cmd {
+	if api == nil || target == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(parent, requestTimeout)
+		defer cancel()
+		d, err := api.InspectContainer(ctx, target)
+		if err != nil {
+			return diagnoseMsg{err: err}
+		}
+		var st docker.Stats
+		var logs []string
+		if tel, ok := api.(TelemetryAPI); ok {
+			if d.Running {
+				st, _ = tel.ContainerStats(ctx, target)
+			}
+			logs, _ = tel.ContainerLogs(ctx, target, docker.MaxLogLines)
+		}
+		diag := diagnose.Classify(summarizer.ContainerInput{
+			Detail: d,
+			Stats:  st,
+			Logs:   logs,
+		})
+		return diagnoseMsg{diag: diag}
 	}
 }
 

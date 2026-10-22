@@ -9,7 +9,10 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
+	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
+	"github.com/CarlosArguelloDev/okshield/internal/telemetry"
 )
 
 // View is the infrastructure resource shown in the sidebar.
@@ -70,6 +73,10 @@ type Options struct {
 	Ctx context.Context
 	// Docker is the Engine API client (nil disables Docker features).
 	Docker DockerAPI
+	// Store is the telemetry ring-buffer + warm store.
+	Store *telemetry.Store
+	// Receiver is the embedded OTLP receiver.
+	Receiver *telemetry.Receiver
 }
 
 // Model is the root Bubble Tea model of OkShield.
@@ -78,8 +85,10 @@ type Model struct {
 	width  int
 	height int
 
-	ctx context.Context
-	api DockerAPI
+	ctx      context.Context
+	api      DockerAPI
+	store    *telemetry.Store
+	receiver *telemetry.Receiver
 
 	hostname string
 	memAlloc uint64
@@ -95,11 +104,20 @@ type Model struct {
 	networks   []docker.Network
 	volumes    []docker.Volume
 	detail     docker.ContainerDetail // inspect of the selected container
+	stats      docker.Stats
+	logs       []string
+	clusters   []summarizer.LogCluster
 	detailErr  error
+
+	pulse    summarizer.Report
+	hasPulse bool
+	diag     diagnose.Diagnosis
+	hasDiag  bool
 
 	input    textinput.Model
 	status   string
 	showHelp bool
+	showOtel bool
 }
 
 // New builds the root model.
@@ -121,11 +139,23 @@ func New(opts Options) Model {
 	ti.PromptStyle = s.Prompt
 	ti.PlaceholderStyle = s.Muted
 
+	otelState := ConnUnknown
+	if opts.Receiver != nil {
+		if opts.Receiver.Stats().Listening {
+			otelState = ConnUp
+		} else {
+			otelState = ConnDown
+		}
+	}
+
 	return Model{
 		styles:   s,
 		ctx:      opts.Ctx,
 		api:      opts.Docker,
+		store:    opts.Store,
+		receiver: opts.Receiver,
 		hostname: host,
+		otel:     otelState,
 		input:    ti,
 		status:   "conectando con docker…",
 	}
@@ -176,11 +206,11 @@ func (m *Model) clampCursor() {
 	}
 }
 
-// detailCmd requests inspect data for the current selection.
+// detailCmd requests inspect, stats and logs data for the current selection.
 func (m Model) detailCmd() tea.Cmd {
 	c, ok := m.selectedContainer()
 	if !ok {
 		return nil
 	}
-	return fetchDetail(m.ctx, m.api, c.ID)
+	return fetchDetail(m.ctx, m.api, m.store, c.ID)
 }
