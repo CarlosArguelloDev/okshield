@@ -88,8 +88,73 @@ func (m Model) renderSidebar(w, h int) string {
 	}
 	b.WriteString(s.Muted.Render(strings.Repeat("─", max(1, w-4))))
 	b.WriteString("\n")
-	b.WriteString(s.Muted.Render("sin datos: cliente Docker\npendiente de conectar"))
+	b.WriteString(m.renderList(w-4, h-2-4))
 	return m.panel(m.focus == FocusSidebar, w, h, b.String())
+}
+
+// renderList renders the active resource list in a scrolling window of
+// `rows` lines and `w` columns.
+func (m Model) renderList(w, rows int) string {
+	s := m.styles
+	n := m.itemCount()
+	if n == 0 {
+		if m.docker == ConnDown {
+			return s.Err.Render("docker no disponible")
+		}
+		if m.docker == ConnUnknown {
+			return s.Muted.Render("cargando…")
+		}
+		return s.Muted.Render("(vacío)")
+	}
+	rows = max(1, rows)
+	start := 0
+	if m.cursor >= rows {
+		start = m.cursor - rows + 1
+	}
+	end := min(n, start+rows)
+
+	var b strings.Builder
+	for i := start; i < end; i++ {
+		glyph, label := m.listRow(i)
+		label = truncate(label, max(1, w-4))
+		if i == m.cursor {
+			b.WriteString(s.Selected.Render("› ") + glyph + " " + s.Selected.Render(label))
+		} else {
+			b.WriteString("  " + glyph + " " + s.Text.Render(label))
+		}
+		if i < end-1 {
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
+
+// listRow returns the status glyph and plain-text label for row i of the
+// active view (labels must stay unstyled so truncate() is ANSI-safe).
+func (m Model) listRow(i int) (string, string) {
+	s := m.styles
+	switch m.view {
+	case ViewNetworks:
+		n := m.networks[i]
+		return s.Muted.Render("⇄"), n.Name + " (" + n.Driver + ")"
+	case ViewVolumes:
+		return s.Muted.Render("▣"), m.volumes[i].Name
+	default:
+		c := m.containers[i]
+		return s.StatusGlyph(containerHealth(c)), c.Name
+	}
+}
+
+// truncate shortens plain text to at most w runes, adding an ellipsis.
+func truncate(str string, w int) string {
+	if lipgloss.Width(str) <= w {
+		return str
+	}
+	r := []rune(str)
+	if w <= 1 || len(r) <= 1 {
+		return "…"
+	}
+	return string(r[:min(len(r), w-1)]) + "…"
 }
 
 func (m Model) renderMain(w, h int) string {
@@ -104,6 +169,9 @@ func (m Model) renderMain(w, h int) string {
 	}
 	header := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
 	body := s.Muted.Render(m.tabPlaceholder())
+	if m.tab == TabDetails {
+		body = m.renderDetails()
+	}
 	return m.panel(m.focus == FocusMain, w, h, header+"\n\n"+body)
 }
 

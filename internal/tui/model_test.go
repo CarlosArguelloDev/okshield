@@ -1,16 +1,19 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/CarlosArguelloDev/okshield/internal/docker"
 )
 
 func sized(t *testing.T) Model {
 	t.Helper()
-	m, _ := New().Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m, _ := New(Options{}).Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	return m.(Model)
 }
 
@@ -110,5 +113,97 @@ func TestHumanBytes(t *testing.T) {
 		if got := humanBytes(tt.in); got != tt.want {
 			t.Errorf("humanBytes(%d) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+type fakeDocker struct {
+	containers []docker.Container
+	networks   []docker.Network
+	volumes    []docker.Volume
+	detail     docker.ContainerDetail
+}
+
+func (f fakeDocker) ListContainers(context.Context) ([]docker.Container, error) {
+	return f.containers, nil
+}
+func (f fakeDocker) ListNetworks(context.Context) ([]docker.Network, error) {
+	return f.networks, nil
+}
+func (f fakeDocker) ListVolumes(context.Context) ([]docker.Volume, error) {
+	return f.volumes, nil
+}
+func (f fakeDocker) InspectContainer(context.Context, string) (docker.ContainerDetail, error) {
+	return f.detail, nil
+}
+
+func TestResourcesAndDetailsRender(t *testing.T) {
+	fd := fakeDocker{
+		containers: []docker.Container{
+			{
+				ID:     "11111111111122222222",
+				Name:   "api",
+				Image:  "api:v1",
+				State:  "running",
+				Status: "Up 10 minutes",
+				Ports:  []docker.Port{{IP: "0.0.0.0", Private: 8080, Public: 8080, Proto: "tcp"}},
+				Networks: []docker.NetAttachment{
+					{Network: "bridge", IP: "172.17.0.2"},
+				},
+				Mounts: []docker.Mount{
+					{Type: "volume", Name: "apidata", Destination: "/data", RW: true},
+				},
+			},
+			{
+				ID:     "33333333333344444444",
+				Name:   "worker",
+				Image:  "worker:v1",
+				State:  "exited",
+				Status: "Exited (137) 1 minute ago",
+			},
+		},
+		networks: []docker.Network{
+			{ID: "n1", Name: "bridge", Driver: "bridge", Scope: "local", Subnets: []docker.Subnet{{CIDR: "172.17.0.0/16", Gateway: "172.17.0.1"}}},
+		},
+		volumes: []docker.Volume{
+			{Name: "apidata", Driver: "local", Mountpoint: "/var/lib/docker/volumes/apidata/_data", Scope: "local"},
+		},
+		detail: docker.ContainerDetail{
+			Container:    docker.Container{ID: "11111111111122222222", Name: "api"},
+			Running:      true,
+			RestartCount: 2,
+			MemoryLimit:  128 << 20,
+			NanoCPUs:     1e9,
+		},
+	}
+
+	m, _ := New(Options{Docker: fd}).Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	model := m.(Model)
+
+	res := fetchResources(context.Background(), fd)()
+	m, _ = model.Update(res)
+	model = m.(Model)
+
+	det := fetchDetail(context.Background(), fd, "11111111111122222222")()
+	m, _ = model.Update(det)
+	model = m.(Model)
+
+	model = key(model, "tab") // switch to TabDetails
+	view := model.View()
+	for _, want := range []string{"api", "worker", "8080", "172.17.0.2", "apidata", "128.0MB"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("container details view missing %q", want)
+		}
+	}
+
+	model = key(model, "2") // switch to Networks
+	view = model.View()
+	if !strings.Contains(view, "172.17.0.0/16") {
+		t.Errorf("network details view missing subnet")
+	}
+
+	model = key(model, "3") // switch to Volumes
+	view = model.View()
+	if !strings.Contains(view, "/var/lib/docker/volumes/apidata/_data") {
+		t.Errorf("volume details view missing mountpoint")
 	}
 }

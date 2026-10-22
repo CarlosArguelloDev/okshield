@@ -18,6 +18,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.memAlloc = msg.alloc
 		return m, sampleMem()
 
+	case refreshTickMsg:
+		return m, tea.Batch(fetchResources(m.ctx, m.api), m.detailCmd())
+
+	case resourcesMsg:
+		return m.applyResources(msg)
+
+	case detailMsg:
+		if c, ok := m.selectedContainer(); ok && c.ID == msg.id {
+			m.detail, m.detailErr = msg.detail, msg.err
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
@@ -90,11 +102,46 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
+			return m, m.detailCmd()
 		}
 	case "down", "j":
-		m.cursor++
+		if m.cursor < m.itemCount()-1 {
+			m.cursor++
+			return m, m.detailCmd()
+		}
 	}
 	return m, nil
+}
+
+// applyResources stores a fresh snapshot and schedules the next refresh.
+func (m Model) applyResources(msg resourcesMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.docker = ConnDown
+		m.status = "docker: " + msg.err.Error()
+		return m, scheduleRefresh()
+	}
+	prev, hadPrev := m.selectedContainer()
+	first := m.docker != ConnUp
+	m.docker = ConnUp
+	m.containers, m.networks, m.volumes = msg.containers, msg.networks, msg.volumes
+
+	// Keep the same container selected across refreshes when it still exists.
+	if hadPrev {
+		for i, c := range m.containers {
+			if c.ID == prev.ID {
+				m.cursor = i
+				break
+			}
+		}
+	}
+	m.clampCursor()
+
+	var cmd tea.Cmd
+	if first {
+		m.status = fmt.Sprintf("docker conectado · %d contenedores", len(m.containers))
+		cmd = m.detailCmd()
+	}
+	return m, tea.Batch(cmd, scheduleRefresh())
 }
 
 // dispatch executes a parsed command. Engines are wired in later commits;
@@ -115,6 +162,7 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 		m.view = View(c.Kind - CmdContainers)
 		m.cursor = 0
 		m.status = "vista: " + m.view.String()
+		return m, m.detailCmd()
 	case CmdOtelStatus:
 		m.status = "/otel status: receptor OTLP aún no iniciado"
 	case CmdPruneTelemetry:
