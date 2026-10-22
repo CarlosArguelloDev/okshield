@@ -73,11 +73,10 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 		k.row("cmd", strings.Join(d.Cmd, " "))
 		k.row("env vars", strconv.Itoa(d.EnvCount))
 		if d.Running {
-			k.section("Métricas en vivo")
-			k.row("CPU", fmt.Sprintf("%.1f%% (throttled: %d)", m.stats.CPUPercent, m.stats.Throttled))
-			k.row("RAM", fmt.Sprintf("%s / %s (%.1f%%)", humanBytes(m.stats.MemUsage), humanBytes(m.stats.MemLimit), m.stats.MemPercent))
-			k.row("red RX/TX", fmt.Sprintf("%s / %s", humanBytes(m.stats.NetRxBytes), humanBytes(m.stats.NetTxBytes)))
-			k.row("PIDs", strconv.FormatUint(m.stats.PIDs, 10))
+			k.row("uso vivo", fmt.Sprintf("CPU %.1f%% (throt:%d) · RAM %s/%s (%.1f%%) · PIDs %d",
+				m.stats.CPUPercent, m.stats.Throttled,
+				humanBytes(m.stats.MemUsage), humanBytes(m.stats.MemLimit), m.stats.MemPercent,
+				m.stats.PIDs))
 		}
 	} else if m.detailErr != nil {
 		k.row("inspect", s.Err.Render(m.detailErr.Error()))
