@@ -162,11 +162,22 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		switch m.focus {
 		case FocusMain:
-			m.mainScroll++
+			botH := bottomH
+			if m.height < 20 {
+				botH = max(5, m.height/3)
+			}
+			bodyRows := max(1, max(6, m.height-botH)-4)
+			if maxOff := max(0, countLines(m.inspectorBody(bodyRows))-bodyRows); m.mainScroll < maxOff {
+				m.mainScroll++
+			}
 		case FocusProcesses:
-			m.procScroll++
+			if m.procScroll < max(0, len(m.containers)+2) {
+				m.procScroll++
+			}
 		case FocusMetadata:
-			m.metaScroll++
+			if m.metaScroll < 5 {
+				m.metaScroll++
+			}
 		default:
 			if m.cursor < m.itemCount()-1 {
 				m.cursor++
@@ -275,4 +286,17 @@ func firstField(s string) string {
 		}
 	}
 	return s
+}
+
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	n := 1
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			n++
+		}
+	}
+	return n
 }
