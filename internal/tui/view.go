@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	headerHeight  = 1
-	commandHeight = 3 // rounded border + 1 line
-	hintHeight    = 1
-	minSidebarW   = 26
+	minSidebarW = 22
+	bottomH     = 8
 )
 
-// View renders the whole screen.
+// View renders the whole screen in a Superfile-inspired multi-pane layout:
+// Top row:    [Sidebar] [Resource Browser] [Active Inspector/Analysis Pane]
+// Bottom row: [Processes / Pulse] [Metadata] [Command / Telemetry]
 func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "iniciando okshield…"
@@ -25,26 +25,294 @@ func (m Model) View() string {
 	if m.showOtel {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderOtelStatus())
 	}
-	bodyH := max(3, m.height-headerHeight-commandHeight-hintHeight)
+
+	botH := bottomH
+	if m.height < 20 {
+		botH = max(5, m.height/3)
+	}
+	topH := max(6, m.height-botH)
+
 	return lipgloss.JoinVertical(lipgloss.Left,
-		m.renderHeader(),
-		m.renderBody(bodyH),
-		m.renderCommandBar(),
-		m.renderHint(),
+		m.renderTopRow(topH),
+		m.renderBottomRow(botH),
 	)
 }
 
-func (m Model) renderHeader() string {
-	s := m.styles
-	left := lipgloss.JoinHorizontal(lipgloss.Top,
-		s.Title.Render("⛨ OkShield"),
-		s.Muted.Render("  host "), s.Text.Render(m.hostname),
-		s.Muted.Render("  docker "), m.connGlyph(m.docker),
-		s.Muted.Render("  otlp "), m.connGlyph(m.otel),
+func (m Model) renderTopRow(h int) string {
+	sideW := max(minSidebarW, m.width/5)
+	remW := max(20, m.width-sideW)
+	browserW := remW * 42 / 100
+	inspectorW := remW - browserW
+
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		m.renderSidebar(sideW, h),
+		m.renderBrowser(browserW, h),
+		m.renderInspector(inspectorW, h),
 	)
-	badge := s.Badge.Render("mem " + humanBytes(m.memAlloc))
-	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(badge))
-	return left + strings.Repeat(" ", gap) + badge
+}
+
+func (m Model) renderBottomRow(h int) string {
+	w1 := m.width / 3
+	w2 := m.width / 3
+	w3 := m.width - w1 - w2
+
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		m.renderProcessesBox(w1, h),
+		m.renderMetadataBox(w2, h),
+		m.renderCommandBox(w3, h),
+	)
+}
+
+func (m Model) sectionDivider(title string, innerW int) string {
+	s := m.styles
+	prefix := "▪ " + title + " "
+	rem := max(1, innerW-lipgloss.Width(prefix)-2)
+	return s.Section.Render(prefix) + s.Muted.Render(strings.Repeat("─", rem))
+}
+
+func (m Model) renderSidebar(w, h int) string {
+	s := m.styles
+	innerW := max(8, w-2)
+	var b strings.Builder
+
+	b.WriteString("  " + s.Section.Render("⛨ OkShield") + "\n\n")
+
+	icons := [...]string{"🐳", "⇄ ", "▣ "}
+	for i := View(0); i <= ViewVolumes; i++ {
+		cursor := "  "
+		style := s.Text
+		if i == m.view {
+			cursor = s.Title.Render("> ")
+			style = s.Selected
+		}
+		fmt.Fprintf(&b, "%s%s %s\n", cursor, icons[i], style.Render(i.String()))
+	}
+
+	b.WriteByte('\n')
+	b.WriteString(m.sectionDivider("Pinned", innerW) + "\n")
+	for idx, t := range tabNames {
+		cursor := "  "
+		st := s.Text
+		if Tab(idx) == m.tab {
+			cursor = s.Title.Render("> ")
+			st = s.Selected
+		}
+		fmt.Fprintf(&b, "%s%s\n", cursor, st.Render(t))
+	}
+
+	b.WriteByte('\n')
+	b.WriteString(m.sectionDivider("Host", innerW) + "\n")
+	fmt.Fprintf(&b, "  %s %s\n", s.Muted.Render("host"), s.Text.Render(truncate(m.hostname, max(4, innerW-9))))
+	fmt.Fprintf(&b, "  %s %s  %s %s\n",
+		s.Muted.Render("dkr"), m.connGlyph(m.docker),
+		s.Muted.Render("otlp"), m.connGlyph(m.otel),
+	)
+	fmt.Fprintf(&b, "  %s %s\n", s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)))
+
+	borderColor := ColorSidebar
+	if m.focus == FocusSidebar {
+		borderColor = ColorFocus
+	}
+	return renderBox(boxSpec{
+		Width:       w,
+		Height:      h,
+		BorderColor: borderColor,
+		Body:        strings.TrimRight(b.String(), "\n"),
+	})
+}
+
+func (m Model) renderBrowser(w, h int) string {
+	s := m.styles
+	pathLabel := "/docker/containers"
+	switch m.view {
+	case ViewNetworks:
+		pathLabel = "/docker/networks"
+	case ViewVolumes:
+		pathLabel = "/docker/volumes"
+	}
+	header := s.Title.Render("🐳 " + pathLabel)
+
+	// Subtract 2 border rows + 2 header/divider rows.
+	bodyRows := max(1, h-4)
+	body := m.renderList(max(6, w-4), bodyRows)
+
+	total := m.itemCount()
+	pos := 0
+	if total > 0 {
+		pos = m.cursor + 1
+	}
+
+	borderColor := ColorSecondary
+	if m.focus == FocusSidebar {
+		borderColor = ColorFocus
+	}
+	return renderBox(boxSpec{
+		Width:       w,
+		Height:      h,
+		BorderColor: borderColor,
+		Header:      header,
+		Body:        body,
+		FootBadges:  []string{"👁 Browser", fmt.Sprintf("%d/%d", pos, total)},
+	})
+}
+
+func (m Model) renderInspector(w, h int) string {
+	s := m.styles
+	tabs := make([]string, 0, tabCount)
+	for t := Tab(0); t < tabCount; t++ {
+		if t == m.tab {
+			tabs = append(tabs, s.Title.Render("▸ "+t.String()))
+		} else {
+			tabs = append(tabs, s.Muted.Render(t.String()))
+		}
+	}
+	header := strings.Join(tabs, s.Muted.Render(" │ "))
+
+	bodyRows := max(1, h-4)
+	var body string
+	switch m.tab {
+	case TabSummary:
+		body = m.renderPulse(bodyRows)
+	case TabDetails:
+		body = m.renderDetails()
+	case TabLogs:
+		body = m.renderLogs(bodyRows)
+	case TabDiagnose:
+		body = m.renderDiagnose()
+	}
+
+	borderColor := ColorSecondary
+	if m.focus == FocusMain {
+		borderColor = ColorFocus
+	}
+	return renderBox(boxSpec{
+		Width:       w,
+		Height:      h,
+		BorderColor: borderColor,
+		Header:      header,
+		Body:        body,
+		FootBadges:  []string{"👁 " + m.tab.String(), fmt.Sprintf("%d/%d", int(m.tab)+1, int(tabCount))},
+	})
+}
+
+func (m Model) renderProcessesBox(w, h int) string {
+	s := m.styles
+	var b strings.Builder
+	anomalies := 0
+	if m.hasPulse && len(m.pulse.Containers) > 0 {
+		fmt.Fprintf(&b, "%s %d ok  %s %d warn  %s %d err\n",
+			s.StatusGlyph(HealthOK), m.pulse.Running,
+			s.StatusGlyph(HealthDegraded), m.pulse.Degraded,
+			s.StatusGlyph(HealthError), m.pulse.Failed,
+		)
+		for _, cp := range m.pulse.Containers {
+			for _, a := range cp.Anomalies {
+				anomalies++
+				fmt.Fprintf(&b, "%s %s: %s\n", s.Err.Render("✖"), s.Selected.Render(cp.Name), s.Text.Render(a))
+			}
+			if !cp.Healthy && len(cp.Anomalies) == 0 && cp.ErrorCount > 0 {
+				anomalies++
+				fmt.Fprintf(&b, "%s %s: %d error logs\n", s.Warn.Render("◐"), s.Selected.Render(cp.Name), cp.ErrorCount)
+			}
+		}
+	}
+	if anomalies == 0 && b.Len() == 0 {
+		b.WriteString(s.Muted.Render("● Sin anomalías activas (? para /whatsup)"))
+	}
+	return renderBox(boxSpec{
+		Width:       w,
+		Height:      h,
+		BorderColor: ColorSecondary,
+		TopTitle:    "Processes",
+		Body:        strings.TrimRight(b.String(), "\n"),
+		FootBadges:  []string{fmt.Sprintf("%d/%d", anomalies, len(m.containers))},
+	})
+}
+
+func (m Model) renderMetadataBox(w, h int) string {
+	s := m.styles
+	var b strings.Builder
+	row := func(k, v string) {
+		if v == "" {
+			v = "-"
+		}
+		fmt.Fprintf(&b, "%s %s\n", s.Muted.Render(fmt.Sprintf("%-14s", k)), s.Text.Render(v))
+	}
+
+	fields := 0
+	switch m.view {
+	case ViewNetworks:
+		if m.cursor >= 0 && m.cursor < len(m.networks) {
+			n := m.networks[m.cursor]
+			row("NetworkName", n.Name)
+			row("Driver", n.Driver)
+			row("Scope", n.Scope)
+			if len(n.Subnets) > 0 {
+				row("Subnet", n.Subnets[0].CIDR)
+			}
+			fields = 4
+		}
+	case ViewVolumes:
+		if m.cursor >= 0 && m.cursor < len(m.volumes) {
+			v := m.volumes[m.cursor]
+			row("VolumeName", v.Name)
+			row("Driver", v.Driver)
+			row("Mountpoint", v.Mountpoint)
+			fields = 3
+		}
+	default:
+		if c, ok := m.selectedContainer(); ok {
+			row("ContainerName", c.Name)
+			row("Image", c.Image)
+			row("State", c.Status)
+			if len(c.Networks) > 0 {
+				row("NetworkIP", c.Networks[0].Network+" "+c.Networks[0].IP)
+			}
+			if len(c.Mounts) > 0 {
+				row("Mount", c.Mounts[0].Destination)
+			}
+			fields = 5
+		}
+	}
+	if fields == 0 {
+		b.WriteString(s.Muted.Render("Sin recurso seleccionado"))
+	}
+	return renderBox(boxSpec{
+		Width:       w,
+		Height:      h,
+		BorderColor: ColorSecondary,
+		TopTitle:    "Metadata",
+		Body:        strings.TrimRight(b.String(), "\n"),
+		FootBadges:  []string{fmt.Sprintf("%d/%d", min(1, fields), fields)},
+	})
+}
+
+func (m Model) renderCommandBox(w, h int) string {
+	s := m.styles
+	var b strings.Builder
+	if m.focus == FocusCommand {
+		b.WriteString(m.input.View() + "\n")
+		if sug := Suggest(m.input.Value()); len(sug) > 0 {
+			b.WriteString(s.Muted.Render("↪ " + strings.Join(sug, " · ")))
+		}
+	} else {
+		b.WriteString(s.Title.Render("> ") + s.Text.Render(m.status) + "\n")
+		b.WriteString(s.Muted.Render("/ comando · ? whatsup · d diagnose\n"))
+		b.WriteString(s.Muted.Render("1/2/3 vistas · tab pestañas · q salir"))
+	}
+
+	borderColor := ColorSecondary
+	if m.focus == FocusCommand {
+		borderColor = ColorFocus
+	}
+	return renderBox(boxSpec{
+		Width:       w,
+		Height:      h,
+		BorderColor: borderColor,
+		TopTitle:    "Command",
+		Body:        strings.TrimRight(b.String(), "\n"),
+		FootBadges:  []string{"mem " + humanBytes(m.memAlloc)},
+	})
 }
 
 func (m Model) connGlyph(c ConnState) string {
@@ -58,43 +326,6 @@ func (m Model) connGlyph(c ConnState) string {
 	}
 }
 
-func (m Model) renderBody(h int) string {
-	sideW := max(minSidebarW, m.width/4)
-	mainW := max(10, m.width-sideW)
-	return lipgloss.JoinHorizontal(lipgloss.Top,
-		m.renderSidebar(sideW, h),
-		m.renderMain(mainW, h),
-	)
-}
-
-// panel renders content inside a rounded border with an exact outer size.
-func (m Model) panel(focused bool, w, h int, content string) string {
-	st := m.styles.Panel
-	if focused {
-		st = m.styles.PanelFocused
-	}
-	// lipgloss v1: Width/Height include padding but exclude the border.
-	return st.Width(max(1, w-2)).Height(max(1, h-2)).MaxHeight(h).Render(content)
-}
-
-func (m Model) renderSidebar(w, h int) string {
-	s := m.styles
-	var b strings.Builder
-	for i := View(0); i <= ViewVolumes; i++ {
-		label := fmt.Sprintf("%d %s", i+1, i)
-		if i == m.view {
-			b.WriteString(s.TabOn.Render(label))
-		} else {
-			b.WriteString(s.TabOff.Render(label))
-		}
-		b.WriteByte('\n')
-	}
-	b.WriteString(s.Muted.Render(strings.Repeat("─", max(1, w-4))))
-	b.WriteString("\n")
-	b.WriteString(m.renderList(w-4, h-2-4))
-	return m.panel(m.focus == FocusSidebar, w, h, b.String())
-}
-
 // renderList renders the active resource list in a scrolling window of
 // `rows` lines and `w` columns.
 func (m Model) renderList(w, rows int) string {
@@ -102,7 +333,7 @@ func (m Model) renderList(w, rows int) string {
 	n := m.itemCount()
 	if n == 0 {
 		if m.docker == ConnDown {
-			return s.Err.Render("docker no disponible")
+			return s.Err.Render("✖ docker no disponible")
 		}
 		if m.docker == ConnUnknown {
 			return s.Muted.Render("cargando…")
@@ -119,9 +350,9 @@ func (m Model) renderList(w, rows int) string {
 	var b strings.Builder
 	for i := start; i < end; i++ {
 		glyph, label := m.listRow(i)
-		label = truncate(label, max(1, w-4))
+		label = truncate(label, max(1, w-5))
 		if i == m.cursor {
-			b.WriteString(s.Selected.Render("› ") + glyph + " " + s.Selected.Render(label))
+			b.WriteString(s.Title.Render("> ") + glyph + " " + s.Selected.Render(label))
 		} else {
 			b.WriteString("  " + glyph + " " + s.Text.Render(label))
 		}
@@ -144,7 +375,7 @@ func (m Model) listRow(i int) (string, string) {
 		return s.Muted.Render("▣"), m.volumes[i].Name
 	default:
 		c := m.containers[i]
-		return s.StatusGlyph(containerHealth(c)), c.Name
+		return s.StatusGlyph(containerHealth(c)), c.Name + " · " + c.Image
 	}
 }
 
@@ -158,48 +389,6 @@ func truncate(str string, w int) string {
 		return "…"
 	}
 	return string(r[:min(len(r), w-1)]) + "…"
-}
-
-func (m Model) renderMain(w, h int) string {
-	s := m.styles
-	tabs := make([]string, 0, tabCount)
-	for t := Tab(0); t < tabCount; t++ {
-		if t == m.tab {
-			tabs = append(tabs, s.TabOn.Render(t.String()))
-		} else {
-			tabs = append(tabs, s.TabOff.Render(t.String()))
-		}
-	}
-	header := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
-	var body string
-	switch m.tab {
-	case TabSummary:
-		body = m.renderPulse(h - 4)
-	case TabDetails:
-		body = m.renderDetails()
-	case TabLogs:
-		body = m.renderLogs(h - 4)
-	case TabDiagnose:
-		body = m.renderDiagnose()
-	}
-	return m.panel(m.focus == FocusMain, w, h, header+"\n\n"+body)
-}
-
-func (m Model) renderCommandBar() string {
-	st := m.styles.Panel
-	if m.focus == FocusCommand {
-		st = m.styles.PanelFocused
-	}
-	return st.Width(max(1, m.width-2)).Render(m.input.View())
-}
-
-func (m Model) renderHint() string {
-	s := m.styles
-	hint := "/ comando · ? pulse · d diagnose · 1/2/3 vistas · tab pestañas · q salir"
-	left := s.Muted.Render(hint)
-	right := s.Text.Render(m.status)
-	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(right))
-	return left + strings.Repeat(" ", gap) + right
 }
 
 func (m Model) renderHelp() string {
