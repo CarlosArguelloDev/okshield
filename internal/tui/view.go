@@ -228,16 +228,16 @@ func (m Model) renderProcessesBox(w, h int) string {
 		for _, cp := range m.pulse.Containers {
 			for _, a := range cp.Anomalies {
 				anomalies++
-				fmt.Fprintf(&b, "%s %s: %s\n", s.Err.Render("✖"), s.Selected.Render(cp.Name), s.Text.Render(a))
+				fmt.Fprintf(&b, "%s %s: %s\n", s.StatusGlyph(HealthError), s.Selected.Render(cp.Name), s.Text.Render(a))
 			}
 			if !cp.Healthy && len(cp.Anomalies) == 0 && cp.ErrorCount > 0 {
 				anomalies++
-				fmt.Fprintf(&b, "%s %s: %d error logs\n", s.Warn.Render("◐"), s.Selected.Render(cp.Name), cp.ErrorCount)
+				fmt.Fprintf(&b, "%s %s: %d error logs\n", s.StatusGlyph(HealthDegraded), s.Selected.Render(cp.Name), cp.ErrorCount)
 			}
 		}
 	}
 	if anomalies == 0 && b.Len() == 0 {
-		b.WriteString(s.Muted.Render("● Sin anomalías activas (? para /whatsup)"))
+		b.WriteString(s.StatusBadge(HealthOK, GlyphOK) + " " + s.Muted.Render("Sin anomalías activas (? para /whatsup)"))
 	}
 	return renderBox(boxSpec{
 		Width:       w,
@@ -338,11 +338,11 @@ func (m Model) renderCommandBox(w, h int) string {
 func (m Model) connGlyph(c ConnState) string {
 	switch c {
 	case ConnUp:
-		return m.styles.StatusGlyph(HealthOK)
+		return m.styles.StatusBadge(HealthOK, GlyphOK)
 	case ConnDown:
-		return m.styles.StatusGlyph(HealthError)
+		return m.styles.StatusBadge(HealthError, GlyphDown)
 	default:
-		return m.styles.StatusGlyph(HealthDegraded)
+		return m.styles.StatusBadge(HealthDegraded, GlyphDegraded)
 	}
 }
 
@@ -353,10 +353,10 @@ func (m Model) renderList(w, rows int) string {
 	n := m.itemCount()
 	if n == 0 {
 		if m.docker == ConnDown {
-			return s.Err.Render("✖ docker no disponible")
+			return s.StatusBadge(HealthError, GlyphDown) + " " + s.Err.Render("docker no disponible")
 		}
 		if m.docker == ConnUnknown {
-			return s.Muted.Render("cargando…")
+			return s.StatusGlyph(HealthInfo) + " " + s.Muted.Render("cargando…")
 		}
 		return s.Muted.Render("(vacío)")
 	}
@@ -370,7 +370,8 @@ func (m Model) renderList(w, rows int) string {
 	var b strings.Builder
 	for i := start; i < end; i++ {
 		glyph, label := m.listRow(i)
-		label = truncate(label, max(1, w-5))
+		glyphW := lipgloss.Width(glyph)
+		label = truncate(label, max(1, w-glyphW-4))
 		if i == m.cursor {
 			b.WriteString(s.Title.Render("> ") + glyph + " " + s.Selected.Render(label))
 		} else {
@@ -383,19 +384,23 @@ func (m Model) renderList(w, rows int) string {
 	return b.String()
 }
 
-// listRow returns the status glyph and plain-text label for row i of the
+// listRow returns the status badge and plain-text label for row i of the
 // active view (labels must stay unstyled so truncate() is ANSI-safe).
 func (m Model) listRow(i int) (string, string) {
 	s := m.styles
 	switch m.view {
 	case ViewNetworks:
 		n := m.networks[i]
-		return s.Muted.Render("⇄"), n.Name + " (" + n.Driver + ")"
+		return s.StatusBadge(HealthInfo, " NET "), n.Name + " (" + n.Driver + ")"
 	case ViewVolumes:
-		return s.Muted.Render("▣"), m.volumes[i].Name
+		return s.StatusBadge(HealthInfo, " VOL "), m.volumes[i].Name
 	default:
 		c := m.containers[i]
-		return s.StatusGlyph(containerHealth(c)), c.Name + " · " + c.Image
+		h := containerHealth(c)
+		if h == HealthError {
+			return s.StatusBadge(HealthError, GlyphDown), c.Name + " · " + c.Image
+		}
+		return s.StatusGlyph(h), c.Name + " · " + c.Image
 	}
 }
 
