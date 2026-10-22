@@ -16,12 +16,13 @@ var (
 	ColorSidebar   = lipgloss.Color("#E08A3C") // warm amber/orange: sidebar border
 	ColorSecondary = lipgloss.Color("#5C6370") // muted slate gray: inactive panel border
 	ColorAccent    = lipgloss.Color("#8EC07C") // sage aqua/green: headers & active cursor
-	ColorSection   = lipgloss.Color("#E06C75") // warm coral: sidebar section headers
+	ColorSection   = lipgloss.Color("#FABD2F") // warm gold: sidebar section titles & brand
+	ColorKey       = lipgloss.Color("#61AFEF") // soft sky blue: keybinding labels
 	ColorOK        = lipgloss.Color("#98C379") // soft sage green
 	ColorWarn      = lipgloss.Color("#E5C07B") // warm wheat/gold
 	ColorErr       = lipgloss.Color("#E06C75") // soft terracotta red
 	ColorText      = lipgloss.Color("#EBDBB2") // warm cream text
-	ColorMuted     = lipgloss.Color("#7C6F64") // warm gray-brown muted text
+	ColorMuted     = lipgloss.Color("#928374") // warm stone gray muted text
 	ColorSurface   = lipgloss.Color("#1D2021") // deep warm charcoal
 )
 
@@ -41,6 +42,7 @@ type Styles struct {
 
 	Title    lipgloss.Style
 	Section  lipgloss.Style
+	Key      lipgloss.Style
 	Muted    lipgloss.Style
 	Text     lipgloss.Style
 	Badge    lipgloss.Style
@@ -69,15 +71,16 @@ func DefaultStyles() Styles {
 			BorderForeground(ColorFocus).
 			Padding(1, 2),
 
-		Title:    lipgloss.NewStyle().Foreground(ColorAccent).Bold(true),
-		Section:  lipgloss.NewStyle().Foreground(ColorSection).Bold(true),
+		Title:    lipgloss.NewStyle().Foreground(ColorAccent),
+		Section:  lipgloss.NewStyle().Foreground(ColorSection),
+		Key:      lipgloss.NewStyle().Foreground(ColorKey),
 		Muted:    lipgloss.NewStyle().Foreground(ColorMuted),
 		Text:     lipgloss.NewStyle().Foreground(ColorText),
-		Badge:    lipgloss.NewStyle().Foreground(ColorSurface).Background(ColorAccent).Padding(0, 1).Bold(true),
-		TabOn:    lipgloss.NewStyle().Foreground(ColorText).Bold(true),
+		Badge:    lipgloss.NewStyle().Foreground(ColorSurface).Background(ColorAccent).Padding(0, 1),
+		TabOn:    lipgloss.NewStyle().Foreground(ColorText),
 		TabOff:   lipgloss.NewStyle().Foreground(ColorMuted),
-		Prompt:   lipgloss.NewStyle().Foreground(ColorAccent).Bold(true),
-		Selected: lipgloss.NewStyle().Foreground(ColorText).Bold(true),
+		Prompt:   lipgloss.NewStyle().Foreground(ColorAccent),
+		Selected: lipgloss.NewStyle().Foreground(ColorText),
 
 		OK:   lipgloss.NewStyle().Foreground(ColorOK),
 		Warn: lipgloss.NewStyle().Foreground(ColorWarn),
