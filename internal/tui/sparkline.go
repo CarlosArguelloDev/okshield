@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-// HistoryCapacity bounds the per-container metrics ring buffer (60 samples =
-// 60-90s of history at 1-1.5s sampling interval, <2KB per container).
-const HistoryCapacity = 60
+// HistoryCapacity bounds the per-container metrics ring buffer (120 samples).
+const HistoryCapacity = 120
 
 // MetricKind identifies which resource metric is plotted in the large Braille chart.
 type MetricKind int
@@ -26,11 +25,16 @@ var metricNames = [...]string{"CPU %", "Memoria %", "Red RX/TX", "Disco I/O"}
 
 func (k MetricKind) String() string { return metricNames[k] }
 
-// Braille column bitmasks from 0 (empty) to 4 (full column) for U+2800..U+28FF.
-// Left column uses dots 7, 3, 2, 1; right column uses dots 8, 6, 5, 4.
+// Braille column bitmasks from 0 (empty) to 4 (full column) for U+2800..U+28FF
+// used by compact single-row sparklines.
 var (
 	brailleLeft  = [5]rune{0x00, 0x40, 0x44, 0x46, 0x47}
 	brailleRight = [5]rune{0x00, 0x80, 0xA0, 0xB0, 0xB8}
+
+	// Single-dot bitmasks indexed by subRow (0 = top .. 3 = bottom) for
+	// gotop-style multi-row Braille line charts.
+	brailleDotLeft  = [4]rune{0x01, 0x02, 0x04, 0x40}
+	brailleDotRight = [4]rune{0x08, 0x10, 0x20, 0x80}
 )
 
 // BrailleSparkline renders a slice of float64 samples into a single-line
@@ -75,10 +79,11 @@ func BrailleSparkline(values []float64, width int, maxVal float64) string {
 	return b.String()
 }
 
-// BrailleChart renders a large multi-row Unicode Braille area chart of `width`
-// character columns (2*width horizontal dot samples) by `height` character rows
-// (4*height vertical dot levels). Each returned string is one row of Braille
-// characters (without axes, so the caller can style axes and chart separately).
+// BrailleChart renders a large multi-row gotop-style Unicode Braille line chart
+// of `width` character columns (2*width horizontal dot samples) by `height`
+// character rows (4*height vertical dot levels). Only the dot at the metric's
+// height (plus vertical steps between adjacent points) is lit, rather than
+// filling all dots down to zero.
 func BrailleChart(values []float64, width, height int, maxVal float64) []string {
 	if width <= 0 || height <= 0 {
 		return nil
@@ -96,50 +101,84 @@ func BrailleChart(values []float64, width, height int, maxVal float64) []string 
 
 	totalDotsX := width * 2
 	totalDotsY := height * 4
-	startIdx := len(values) - totalDotsX
 
-	rows := make([]string, height)
-	var b strings.Builder
-	for r := 0; r < height; r++ {
-		b.Reset()
-		b.Grow(width * 3)
-		invRow := height - 1 - r
-		baseDots := invRow * 4
-
-		for pair := 0; pair < width; pair++ {
-			iL := startIdx + pair*2
-			iR := iL + 1
-			var vL, vR float64
-			if iL >= 0 && iL < len(values) {
-				vL = values[iL]
-			}
-			if iR >= 0 && iR < len(values) {
-				vR = values[iR]
-			}
-			dotsL := dotCount(vL, maxVal, totalDotsY)
-			dotsR := dotCount(vR, maxVal, totalDotsY)
-			lvlL := clampInt(dotsL-baseDots, 0, 4)
-			lvlR := clampInt(dotsR-baseDots, 0, 4)
-			b.WriteRune(0x2800 | brailleLeft[lvlL] | brailleRight[lvlR])
+	grid := make([][]rune, height)
+	for r := range grid {
+		row := make([]rune, width)
+		for c := range row {
+			row[c] = 0x2800
 		}
-		rows[r] = b.String()
+		grid[r] = row
 	}
-	return rows
-}
 
-func dotCount(v, maxVal float64, totalDotsY int) int {
-	if v <= 0 || maxVal <= 0 {
-		return 0
+	if len(values) == 0 {
+		out := make([]string, height)
+		for r := range grid {
+			out[r] = string(grid[r])
+		}
+		return out
 	}
-	ratio := v / maxVal
-	if ratio > 1 {
-		ratio = 1
+
+	sampleAt := func(x int) float64 {
+		idx := len(values) - totalDotsX + x
+		if idx < 0 {
+			return values[0]
+		}
+		if idx >= len(values) {
+			return values[len(values)-1]
+		}
+		return values[idx]
 	}
-	dots := int(math.Round(ratio * float64(totalDotsY)))
-	if dots == 0 && v > 0 {
-		return 1
+
+	yTopFor := func(v float64) int {
+		if v <= 0 || maxVal <= 0 {
+			return totalDotsY - 1
+		}
+		ratio := v / maxVal
+		if ratio > 1 {
+			ratio = 1
+		}
+		yBottom := int(math.Round(ratio * float64(totalDotsY-1)))
+		return clampInt((totalDotsY-1)-yBottom, 0, totalDotsY-1)
 	}
-	return dots
+
+	setDot := func(x, yTop int) {
+		charCol := x / 2
+		charRow := yTop / 4
+		subRow := yTop % 4
+		if charRow < 0 || charRow >= height || charCol < 0 || charCol >= width {
+			return
+		}
+		if x%2 == 0 {
+			grid[charRow][charCol] |= brailleDotLeft[subRow]
+		} else {
+			grid[charRow][charCol] |= brailleDotRight[subRow]
+		}
+	}
+
+	prevY := yTopFor(sampleAt(0))
+	for x := 0; x < totalDotsX; x++ {
+		curY := yTopFor(sampleAt(x))
+		setDot(x, curY)
+		// Connect steep vertical transitions between adjacent columns so peaks
+		// form a continuous dotted line like gotop/btop.
+		if curY < prevY-1 {
+			for y := curY + 1; y < prevY; y++ {
+				setDot(x, y)
+			}
+		} else if curY > prevY+1 {
+			for y := prevY + 1; y < curY; y++ {
+				setDot(x, y)
+			}
+		}
+		prevY = curY
+	}
+
+	out := make([]string, height)
+	for r := range grid {
+		out[r] = string(grid[r])
+	}
+	return out
 }
 
 func clampInt(v, lo, hi int) int {
@@ -230,16 +269,8 @@ func (s *MetricSeries) PushFull(cpuPct, memPct float64, rxBytes, txBytes, blkRea
 	}
 	s.cpu[idx] = cpuPct
 	s.mem[idx] = memPct
-	netVal := s.rxRateBps + s.txRateBps
-	if netVal == 0 && (rxBytes+txBytes) > 0 {
-		netVal = float64(rxBytes + txBytes)
-	}
-	diskVal := s.readRate + s.writeRate
-	if diskVal == 0 && (blkRead+blkWrite) > 0 {
-		diskVal = float64(blkRead + blkWrite)
-	}
-	s.net[idx] = netVal
-	s.disk[idx] = diskVal
+	s.net[idx] = s.rxRateBps + s.txRateBps
+	s.disk[idx] = s.readRate + s.writeRate
 }
 
 // Samples returns the chronological history for the given MetricKind.
@@ -280,8 +311,8 @@ func (s *MetricSeries) NetRates() (rxBps, txBps float64) {
 func FormatMetricAxis(kind MetricKind, val float64) string {
 	switch kind {
 	case MetricNet, MetricDisk:
-		return fmt.Sprintf("%7s", humanBytes(uint64(max(0, int64(val)))))
+		return fmt.Sprintf("%7s/s", humanBytes(uint64(max(0, int64(val)))))
 	default:
-		return fmt.Sprintf("%6.0f%%", val)
+		return fmt.Sprintf("%8.0f%%", val)
 	}
 }

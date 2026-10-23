@@ -72,13 +72,19 @@ func TestMetricSeriesRingBuffer(t *testing.T) {
 	if rx != 1024 || tx != 512 {
 		t.Errorf("rates = (%v, %v), want (1024, 512)", rx, tx)
 	}
-	rows := BrailleChart(cpu, 12, 6, 100)
+	rows := BrailleChart([]float64{50, 50, 50, 50}, 12, 6, 100)
 	if len(rows) != 6 {
 		t.Fatalf("BrailleChart rows = %d, want 6", len(rows))
 	}
 	for i, r := range rows {
 		if utf8.RuneCountInString(r) != 12 {
 			t.Errorf("row %d rune count = %d, want 12", i, utf8.RuneCountInString(r))
+		}
+	}
+	// Bottom row (row 5) should be empty (all U+2800) for a flat 50% line.
+	for _, ch := range rows[5] {
+		if ch != 0x2800 {
+			t.Errorf("bottom row should be blank U+2800 for 50%% line, got %U", ch)
 		}
 	}
 }
