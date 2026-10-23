@@ -4,9 +4,11 @@
 package diagnose
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/CarlosArguelloDev/okshield/decider_patterns/container_policy"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 )
@@ -26,19 +28,31 @@ const (
 
 // Diagnosis is the structured output of the decision model for one container.
 type Diagnosis struct {
-	Container     string
-	Category      Category
-	FaultLabel    string // e.g. OOMKilled, NetworkTimeout, VolumePermissionError, DBConnectionRefused, CPUThrottling, CrashLoop
-	Confidence    float64
-	WhatHappened  string
-	WhyItHappened string
-	RootCauseTree []string // visual tree nodes explaining the decision path
-	Runbook       []string // exact commands to remediate the issue
+	Container        string
+	Category         Category
+	FaultLabel       string // e.g. OOMKilled, NetworkTimeout, VolumePermissionError, DBConnectionRefused, CPUThrottling, CrashLoop
+	Confidence       float64
+	PolicyChoice     container_policy.PolicyChoice
+	PolicyConfidence float64
+	DeciderLatencyMs int64
+	BedrockBypass    bool
+	BedrockPrompt    string
+	WhatHappened     string
+	WhyItHappened    string
+	RootCauseTree    []string // visual tree nodes explaining the decision path
+	Runbook          []string // exact commands to remediate the issue
 }
 
-// Classify evaluates the feature vector of a container and returns a
-// deterministic Diagnosis with a root-cause decision tree and runbook.
+// Classify evaluates the feature vector of a container using the Strands
+// Decider 2B `#policy` pattern and routes non-healthy incidents to Amazon Bedrock.
 func Classify(in summarizer.ContainerInput) Diagnosis {
+	return ClassifyWithContext(context.Background(), in)
+}
+
+// ClassifyWithContext evaluates Strands Decider 2B `#policy` and, unless
+// short-circuited by HEALTHY_NO_ACTION (confidence >= 0.80), routes to Amazon
+// Bedrock to synthesize the Root Cause and 3-command remediation Runbook.
+func ClassifyWithContext(ctx context.Context, in summarizer.ContainerInput) Diagnosis {
 	d := in.Detail
 	st := in.Stats
 	name := d.Name
@@ -46,6 +60,71 @@ func Classify(in summarizer.ContainerInput) Diagnosis {
 		name = d.ShortID()
 	}
 	clusters := summarizer.ClusterLogs(in.Logs)
+	patterns := make([]string, 0, len(clusters))
+	for _, cl := range clusters {
+		patterns = append(patterns, fmt.Sprintf("[%s] x%d: %s", cl.Severity, cl.Count, cl.Template))
+	}
+
+	dec := container_policy.Evaluate(ctx, container_policy.TelemetryInput{
+		Container:     name,
+		Status:        d.State,
+		ExitCode:      d.ExitCode,
+		OOMKilled:     d.OOMKilled,
+		RestartCount:  d.RestartCount,
+		CPUPct:        st.CPUPercent,
+		MemPct:        st.MemPercent,
+		Throttled:     st.Throttled,
+		ReadOnlyMount: hasReadOnlyMount(d.Mounts),
+		LogPatterns:   patterns,
+	})
+
+	// Short-circuit: if Strands Decider 2B returns HEALTHY_NO_ACTION with
+	// confidence >= 0.80, return immediately in ~115ms without calling Bedrock.
+	if dec.ShouldBypassBedrock() {
+		return Diagnosis{
+			Container:        name,
+			Category:         CatHealthy,
+			FaultLabel:       "Healthy",
+			Confidence:       dec.Confidence,
+			PolicyChoice:     dec.Choice,
+			PolicyConfidence: dec.Confidence,
+			DeciderLatencyMs: dec.DeciderLatencyMs,
+			BedrockBypass:    true,
+			WhatHappened:     fmt.Sprintf("El contenedor %q opera dentro de parámetros normales.", name),
+			WhyItHappened:    "Strands Decider 2B clasificó HEALTHY_NO_ACTION (confianza >= 0.80), omitiendo la llamada a Amazon Bedrock para ahorrar costos y latencia.",
+			RootCauseTree: []string{
+				fmt.Sprintf("├─ Strands Decider 2B (#policy): %s (%.0f%% · %dms)", dec.Choice, dec.Confidence*100, dec.DeciderLatencyMs),
+				fmt.Sprintf("├─ Estado: %s (CPU=%.1f%%, RAM=%.1f%%)", d.State, st.CPUPercent, st.MemPercent),
+				"└─ Enrutamiento: Bedrock Bypass = YES (Short-Circuit activo)",
+			},
+			Runbook: []string{
+				fmt.Sprintf("docker stats --no-stream %s", name),
+			},
+		}
+	}
+
+	diag := classifyFaultDetails(name, d, st, clusters)
+	diag.PolicyChoice = dec.Choice
+	diag.PolicyConfidence = dec.Confidence
+	diag.DeciderLatencyMs = dec.DeciderLatencyMs
+	diag.BedrockBypass = false
+	diag.BedrockPrompt = BuildBedrockPrompt(dec, in, patterns)
+
+	if br, ok := invokeBedrock(ctx, diag.BedrockPrompt); ok {
+		if br.WhatHappened != "" {
+			diag.WhatHappened = br.WhatHappened
+		}
+		if br.WhyItHappened != "" {
+			diag.WhyItHappened = br.WhyItHappened
+		}
+		if len(br.Runbook) > 0 {
+			diag.Runbook = br.Runbook
+		}
+	}
+	return diag
+}
+
+func classifyFaultDetails(name string, d docker.ContainerDetail, st docker.Stats, clusters []summarizer.LogCluster) Diagnosis {
 	joined := joinTemplates(clusters)
 
 	// 1. MEMORY_EXHAUSTION (OOMKilled / Exit 137 / Memory pressure)
@@ -145,24 +224,24 @@ func Classify(in summarizer.ContainerInput) Diagnosis {
 		}
 	}
 
-	// 5. CPU_THROTTLING (CFS bandwidth quota throttling or extreme CPU spike)
+	// 5. CPU_THROTTLING / RESOURCE_SATURATION (audit & contain runaway processes rather than granting extra CPU)
 	if st.Throttled > 0 || st.CPUPercent >= 90.0 || containsAny(joined, "cpu throttled", "throttling") {
 		return Diagnosis{
 			Container:     name,
 			Category:      CatCPUThrottling,
 			FaultLabel:    "CPUThrottling",
-			Confidence:    0.89,
-			WhatHappened:  fmt.Sprintf("El contenedor %q sufre estrangulamiento de CPU (CPU=%.1f%%, periodos throttled=%d).", name, st.CPUPercent, st.Throttled),
-			WhyItHappened: "El planificador CFS del kernel está limitando los ciclos del contenedor por superar su cuota NanoCPUs o por un bucle intensivo.",
+			Confidence:    0.91,
+			WhatHappened:  fmt.Sprintf("El contenedor %q presenta saturación de CPU (CPU=%.1f%%, periodos throttled=%d).", name, st.CPUPercent, st.Throttled),
+			WhyItHappened: "Un proceso intensivo o bucle abusivo consume toda la cuota de CPU; se debe auditar con docker top y contener su cuota (--cpus) en lugar de asignarle más CPU.",
 			RootCauseTree: []string{
 				fmt.Sprintf("├─ Uso CPU: %.1f%% (NanoCPUs=%d)", st.CPUPercent, d.NanoCPUs),
 				fmt.Sprintf("├─ Periodos CFS throttled: %d", st.Throttled),
-				"└─ Clasificación: CPU_THROTTLING [CPUThrottling]",
+				"└─ Política: RESOURCE_SATURATION → Auditar y contener proceso abusivo",
 			},
 			Runbook: []string{
+				fmt.Sprintf("docker top %s -eo pid,ppid,user,%%cpu,%%mem,args", name),
+				fmt.Sprintf("docker update --cpus 0.50 --cpu-shares 256 %s", name),
 				fmt.Sprintf("docker stats --no-stream %s", name),
-				fmt.Sprintf("docker update --cpus 2.0 %s", name),
-				fmt.Sprintf("docker top %s", name),
 			},
 		}
 	}

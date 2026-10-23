@@ -1,8 +1,10 @@
 package diagnose
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/CarlosArguelloDev/okshield/decider_patterns/container_policy"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 )
@@ -117,6 +119,22 @@ func TestClassifyAllCategories(t *testing.T) {
 			}
 			if len(got.RootCauseTree) == 0 || len(got.Runbook) == 0 {
 				t.Errorf("Classify(%s) missing tree or runbook", tt.name)
+			}
+			wantBypass := tt.wantCat == CatHealthy
+			if got.BedrockBypass != wantBypass {
+				t.Errorf("Classify(%s) BedrockBypass = %v, want %v", tt.name, got.BedrockBypass, wantBypass)
+			}
+			if got.PolicyChoice == "" || got.PolicyConfidence < 0.80 || got.DeciderLatencyMs <= 0 {
+				t.Errorf("Classify(%s) missing Decider 2B metadata: choice=%q conf=%.2f latency=%dms",
+					tt.name, got.PolicyChoice, got.PolicyConfidence, got.DeciderLatencyMs)
+			}
+			if tt.wantCat == CatCPUThrottling {
+				if got.PolicyChoice != container_policy.PolicyResourceSaturation {
+					t.Errorf("CPU throttling policy = %q, want %q", got.PolicyChoice, container_policy.PolicyResourceSaturation)
+				}
+				if !strings.Contains(got.BedrockPrompt, "docker top") || !strings.Contains(got.Runbook[0], "docker top") {
+					t.Errorf("RESOURCE_SATURATION should prioritize auditing with docker top: runbook=%v", got.Runbook)
+				}
 			}
 		})
 	}

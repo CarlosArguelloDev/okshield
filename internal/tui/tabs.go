@@ -132,10 +132,29 @@ func (m Model) renderDiagnose() string {
 	} else if diag.Category == diagnose.CatCPUThrottling {
 		diagHealth = HealthDegraded
 	}
-	fmt.Fprintf(&b, "%s  %s  %s\n\n",
+	fmt.Fprintf(&b, "%s  %s\n\n",
 		s.Title.Render(tr.DiagTitle+diag.Container),
 		s.StatusBadge(diagHealth, fmt.Sprintf(" %s · %s ", diag.Category, diag.FaultLabel)),
-		s.Muted.Render(fmt.Sprintf(tr.DiagConfidence, diag.Confidence*100)),
+	)
+
+	policyChoice := string(diag.PolicyChoice)
+	if policyChoice == "" {
+		policyChoice = string(diag.Category)
+	}
+	policyConf := diag.PolicyConfidence
+	if policyConf == 0 {
+		policyConf = diag.Confidence
+	}
+	bypassBadge := s.StatusBadge(HealthDegraded, " Bedrock Bypass: NO ")
+	if diag.BedrockBypass {
+		bypassBadge = s.StatusBadge(HealthOK, " Bedrock Bypass: YES ")
+	}
+	fmt.Fprintf(&b, "%s  %s  %s  %s  %s\n\n",
+		s.Section.Render("▸ "+tr.DiagDeciderHdr),
+		s.StatusBadge(diagHealth, " "+policyChoice+" "),
+		s.Selected.Render(fmt.Sprintf(tr.DiagCalibConf, policyConf*100)),
+		s.Warn.Render(fmt.Sprintf(tr.DiagLatency, diag.DeciderLatencyMs)),
+		bypassBadge,
 	)
 
 	b.WriteString(s.Selected.Render(tr.DiagWhat) + " " + s.Text.Render(diag.WhatHappened) + "\n")

@@ -109,6 +109,9 @@ type Catalog struct {
 	DiagHint       string
 	DiagTitle      string
 	DiagConfidence string
+	DiagDeciderHdr string
+	DiagCalibConf  string
+	DiagLatency    string
 	DiagWhat       string
 	DiagWhy        string
 	DiagTreeTitle  string
@@ -202,9 +205,12 @@ var catalogES = Catalog{
 	DiagHint:       "Pulsa d o ejecuta /diagnose [container] para clasificar la causa raíz y generar el runbook.",
 	DiagTitle:      "Diagnóstico: ",
 	DiagConfidence: "confianza %.0f%%",
+	DiagDeciderHdr: "Strands Decider 2B (#policy)",
+	DiagCalibConf:  "Confianza Calibrada: %.1f%%",
+	DiagLatency:    "Latencia: %dms",
 	DiagWhat:       "Qué pasó:",
 	DiagWhy:        "Por qué pasó:",
-	DiagTreeTitle:  "Árbol de Decisión (Causa Raíz)",
+	DiagTreeTitle:  "Causa Raíz (Árbol de Decisión)",
 	DiagRunbook:    "Guía de Resolución (Runbook)",
 
 	OtelTitle:     "Estado de Telemetría OTLP & DuckDB",
@@ -295,9 +301,12 @@ var catalogEN = Catalog{
 	DiagHint:       "Press d or run /diagnose [container] to classify root cause and generate the runbook.",
 	DiagTitle:      "Diagnosis: ",
 	DiagConfidence: "confidence %.0f%%",
+	DiagDeciderHdr: "Strands Decider 2B (#policy)",
+	DiagCalibConf:  "Calibrated Confidence: %.1f%%",
+	DiagLatency:    "Latency: %dms",
 	DiagWhat:       "What happened:",
 	DiagWhy:        "Why it happened:",
-	DiagTreeTitle:  "Decision Tree (Root Cause)",
+	DiagTreeTitle:  "Root Cause (Decision Tree)",
 	DiagRunbook:    "Resolution Guide (Runbook)",
 
 	OtelTitle:     "OTLP & DuckDB Telemetry Status",

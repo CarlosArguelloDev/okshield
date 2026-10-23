@@ -216,8 +216,11 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	m, _ = model.Update(dmsg)
 	model = m.(Model)
 	model = key(model, "d")
-	if !strings.Contains(model.View(), "Diagnóstico:") {
-		t.Errorf("diagnose view missing header")
+	diagView := model.View()
+	for _, want := range []string{"Diagnóstico:", "Strands Decider 2B", "Bedrock Bypass:"} {
+		if !strings.Contains(diagView, want) {
+			t.Errorf("diagnose view missing %q", want)
+		}
 	}
 	model = key(model, "?") // back to TabSummary
 

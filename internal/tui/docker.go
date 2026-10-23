@@ -201,7 +201,7 @@ func runDiagnose(parent context.Context, api DockerAPI, target string) tea.Cmd {
 			}
 			logs, _ = tel.ContainerLogs(ctx, target, docker.MaxLogLines)
 		}
-		diag := diagnose.Classify(summarizer.ContainerInput{
+		diag := diagnose.ClassifyWithContext(ctx, summarizer.ContainerInput{
 			Detail: d,
 			Stats:  st,
 			Logs:   logs,
