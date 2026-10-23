@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 )
 
@@ -19,7 +21,8 @@ func (k kv) row(key, val string) {
 	if val == "" {
 		val = "-"
 	}
-	fmt.Fprintf(k.b, "%s %s\n", k.s.Muted.Render(fmt.Sprintf("%-12s", key)), k.s.Text.Render(val))
+	pad := max(1, 15-lipgloss.Width(key))
+	fmt.Fprintf(k.b, "%s%s %s\n", k.s.Muted.Render(key), strings.Repeat(" ", pad), k.s.Text.Render(val))
 }
 
 func (k kv) section(title string) {
@@ -109,32 +112,34 @@ func (m Model) renderMetrics(bodyRows int) string {
 	sideW := max(minSidebarW, m.width/6)
 	remW := max(20, m.width-sideW)
 	inspectorW := max(20, remW-max(24, remW*26/100))
-	chartW := clampInt(inspectorW-18, 24, 54)
-	chartH := clampInt(bodyRows-10, 6, 11)
+	chartW := max(20, inspectorW-15)
+	chartH := clampInt(bodyRows-10, 6, 12)
 
 	rows := BrailleChart(activeSeries, chartW, chartH, maxVal)
 	for r, line := range rows {
-		var yLabel string
+		yLabel := "         "
+		tick := "│"
 		switch {
 		case r == 0:
 			yLabel = FormatMetricAxis(m.metricKind, maxVal)
+			tick = "┤"
 		case r == chartH/2:
 			yLabel = FormatMetricAxis(m.metricKind, maxVal*0.5)
+			tick = "┤"
 		case r == chartH-1:
 			yLabel = FormatMetricAxis(m.metricKind, 0)
-		default:
-			yLabel = "       "
+			tick = "┤"
 		}
 		fmt.Fprintf(&b, "%s %s%s\n",
 			s.Muted.Render(yLabel),
-			s.Muted.Render("┤"),
+			s.Muted.Render(tick),
 			chartStyle.Render(line),
 		)
 	}
-	xAxis := "       └" + strings.Repeat("─", chartW)
+	xAxis := strings.Repeat(" ", 10) + "└" + strings.Repeat("─", chartW)
 	b.WriteString(s.Muted.Render(xAxis) + "\n")
-	timeSpan := max(4, chartW-10)
-	b.WriteString(s.Muted.Render("        -60s"+strings.Repeat(" ", timeSpan)+"ahora") + "\n\n")
+	timeSpan := max(2, chartW-8)
+	b.WriteString(s.Muted.Render(strings.Repeat(" ", 10)+"-60s"+strings.Repeat(" ", timeSpan)+"ahora") + "\n\n")
 
 	memLim := m.stats.MemLimit
 	if memLim == 0 && m.detail.ID == target.ID && m.detail.MemoryLimit > 0 {
@@ -160,13 +165,13 @@ func (m Model) renderMetrics(bodyRows int) string {
 		humanBytes(uint64(rxRate)),
 		humanBytes(m.stats.NetTxBytes),
 		humanBytes(uint64(txRate)),
-		s.OK.Render(BrailleSparkline(netHist, 16, 0)),
+		s.OK.Render(BrailleSparkline(netHist, 16, maxSeriesVal(netHist, 1024.0))),
 	))
 	k.row(metricCursor(m.metricKind == MetricDisk, "Disco I/O"), fmt.Sprintf("lect %s · escr %s · PIDs %d  %s",
 		humanBytes(m.stats.BlkReadBytes),
 		humanBytes(m.stats.BlkWriteBytes),
 		m.stats.PIDs,
-		s.Warn.Render(BrailleSparkline(diskHist, 16, 0)),
+		s.Warn.Render(BrailleSparkline(diskHist, 16, maxSeriesVal(diskHist, 1024.0))),
 	))
 	return strings.TrimRight(b.String(), "\n")
 }
