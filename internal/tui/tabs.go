@@ -149,12 +149,14 @@ func (m Model) renderDiagnose() string {
 	if diag.BedrockBypass {
 		bypassBadge = s.StatusBadge(HealthOK, " Bedrock Bypass: YES ")
 	}
-	fmt.Fprintf(&b, "%s  %s  %s  %s  %s\n\n",
+	fmt.Fprintf(&b, "%s  %s  %s\n",
 		s.Section.Render("▸ "+tr.DiagDeciderHdr),
 		s.StatusBadge(diagHealth, " "+policyChoice+" "),
+		bypassBadge,
+	)
+	fmt.Fprintf(&b, "  %s  ·  %s\n\n",
 		s.Selected.Render(fmt.Sprintf(tr.DiagCalibConf, policyConf*100)),
 		s.Warn.Render(fmt.Sprintf(tr.DiagLatency, diag.DeciderLatencyMs)),
-		bypassBadge,
 	)
 
 	b.WriteString(s.Selected.Render(tr.DiagWhat) + " " + s.Text.Render(diag.WhatHappened) + "\n")
