@@ -35,7 +35,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case metricsSampleMsg:
 		if msg.err == nil {
 			m.recordMetrics(msg.id, msg.stats, msg.at)
-			if c, ok := m.selectedContainer(); ok && c.ID == msg.id {
+			if c, ok := m.selectedContainer(); (ok && c.ID == msg.id) || !ok {
 				m.stats = msg.stats
 			}
 		}
@@ -178,7 +178,7 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.cursor--
 				m.mainScroll = 0
 				m.metaScroll = 0
-				return m, m.detailCmd()
+				return m, tea.Batch(m.detailCmd(), m.metricsCmd())
 			}
 		}
 	case "down", "j":
@@ -209,7 +209,7 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.cursor++
 				m.mainScroll = 0
 				m.metaScroll = 0
-				return m, m.detailCmd()
+				return m, tea.Batch(m.detailCmd(), m.metricsCmd())
 			}
 		}
 	}
@@ -241,7 +241,7 @@ func (m Model) applyResources(msg resourcesMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if first {
 		m.status = fmt.Sprintf("docker conectado · %d contenedores", len(m.containers))
-		cmd = tea.Batch(m.detailCmd(), runPulse(m.ctx, m.api, m.containers))
+		cmd = tea.Batch(m.detailCmd(), m.metricsCmd(), runPulse(m.ctx, m.api, m.containers))
 	}
 	return m, tea.Batch(cmd, scheduleRefresh())
 }

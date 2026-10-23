@@ -37,9 +37,8 @@ var (
 	brailleDotRight = [4]rune{0x08, 0x10, 0x20, 0x80}
 )
 
-// SmoothSeries applies an Exponential Moving Average (EMA, alpha=0.45) followed
-// by a 5-point weighted moving average kernel [1, 2, 4, 2, 1]/10 to transform
-// abrupt step changes into smooth, organic wave transitions.
+// SmoothSeries applies a fast 3-point moving average (max window n=3) so spikes
+// transition smoothly without introducing multi-sample lag at the real-time edge.
 func SmoothSeries(values []float64) []float64 {
 	n := len(values)
 	if n == 0 {
@@ -51,32 +50,26 @@ func SmoothSeries(values []float64) []float64 {
 		return out
 	}
 
-	// Pass 1: forward EMA to soften sudden spikes.
-	const alpha = 0.45
-	ema := make([]float64, n)
-	ema[0] = values[0]
-	for i := 1; i < n; i++ {
-		ema[i] = alpha*values[i] + (1.0-alpha)*ema[i-1]
-	}
-
-	// Pass 2: 5-point triangular moving average [1, 2, 4, 2, 1] / 10.
-	weights := [5]float64{1, 2, 4, 2, 1}
+	// Strictly max 3 points per sample (i-1, i, i+1), keeping the latest sample
+	// responsive to real-time changes.
 	for i := 0; i < n; i++ {
-		var sum, wSum float64
-		for k := -2; k <= 2; k++ {
-			idx := clampInt(i+k, 0, n-1)
-			w := weights[k+2]
-			sum += ema[idx] * w
-			wSum += w
+		if i == n-1 {
+			// Real-time rightmost point: blend 70% current + 30% previous (max 2 pts)
+			// so the live edge reacts immediately.
+			out[i] = 0.70*values[i] + 0.30*values[i-1]
+			continue
 		}
-		out[i] = sum / wSum
+		prev := values[max(0, i-1)]
+		curr := values[i]
+		next := values[min(n-1, i+1)]
+		out[i] = (prev + 2.0*curr + next) * 0.25
 	}
 	return out
 }
 
-// interpolateWave resamples a smoothed series across `targetPoints` horizontal
-// dot columns using cosine interpolation between sample points so transitions
-// between ticks render as fluid waves instead of staircases.
+// interpolateWave maps the 3-point smoothed series to `targetPoints` horizontal
+// dot columns, anchoring the newest sample directly at the rightmost column
+// ("ahora") for zero-latency visual feedback.
 func interpolateWave(values []float64, targetPoints int) []float64 {
 	if targetPoints <= 0 {
 		return nil
@@ -94,9 +87,8 @@ func interpolateWave(values []float64, targetPoints int) []float64 {
 		return out
 	}
 
-	// Each raw sample spans `step` horizontal dots (2 dots per tick), keeping
-	// the timeline right-aligned at "ahora" while smoothly interpolating
-	// intermediate points.
+	// 2 horizontal Braille dots (1 character cell) per sample, with the latest
+	// value pinned at the rightmost dot column.
 	const dotsPerSample = 2.0
 	totalSpan := float64(n-1) * dotsPerSample
 	startOffset := float64(targetPoints-1) - totalSpan
@@ -110,14 +102,14 @@ func interpolateWave(values []float64, targetPoints int) []float64 {
 		pos := rel / dotsPerSample
 		i0 := int(math.Floor(pos))
 		if i0 >= n-1 {
-			out[x] = smoothed[n-1]
+			out[x] = values[n-1]
 			continue
 		}
 		frac := pos - float64(i0)
-		// Cosine interpolation for organic S-curve slope between samples.
-		mu := (1.0 - math.Cos(frac*math.Pi)) * 0.5
-		out[x] = smoothed[i0]*(1.0-mu) + smoothed[i0+1]*mu
+		out[x] = smoothed[i0]*(1.0-frac) + smoothed[i0+1]*frac
 	}
+	// Pin the rightmost dot to the latest sample so there is zero render lag.
+	out[targetPoints-1] = values[n-1]
 	return out
 }
 

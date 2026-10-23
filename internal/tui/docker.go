@@ -30,7 +30,7 @@ type TelemetryAPI interface {
 
 const (
 	refreshInterval = 3 * time.Second
-	metricsInterval = 1500 * time.Millisecond
+	metricsInterval = 1 * time.Second
 	requestTimeout  = 3 * time.Second
 )
 
