@@ -207,6 +207,8 @@ func (m Model) inspectorBody(bodyRows int) string {
 	switch m.tab {
 	case TabSummary:
 		return m.renderPulse(bodyRows)
+	case TabMetrics:
+		return m.renderMetrics(bodyRows)
 	case TabDetails:
 		return m.renderDetails()
 	case TabLogs:

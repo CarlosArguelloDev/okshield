@@ -49,7 +49,9 @@ func TestKeybindingsSwitchViewsAndTabs(t *testing.T) {
 		{[]string{"3", "1"}, ViewContainers, TabSummary, FocusSidebar},
 		{[]string{"d"}, ViewContainers, TabDiagnose, FocusSidebar},
 		{[]string{"d", "?"}, ViewContainers, TabSummary, FocusSidebar},
-		{[]string{"right", "right"}, ViewContainers, TabLogs, FocusSidebar},
+		{[]string{"right"}, ViewContainers, TabMetrics, FocusSidebar},
+		{[]string{"right", "right"}, ViewContainers, TabDetails, FocusSidebar},
+		{[]string{"right", "right", "right"}, ViewContainers, TabLogs, FocusSidebar},
 		{[]string{"right", "left"}, ViewContainers, TabSummary, FocusSidebar},
 		{[]string{"tab"}, ViewContainers, TabSummary, FocusMain},
 		{[]string{"tab", "tab"}, ViewContainers, TabSummary, FocusProcesses},
@@ -219,7 +221,7 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	}
 	model = key(model, "?") // back to TabSummary
 
-	model = key(model, "right") // switch to TabDetails using right arrow
+	model = key(model, "right") // switch to TabMetrics using right arrow
 	m, _ = model.Update(metricsSampleMsg{
 		id: "11111111111122222222",
 		stats: docker.Stats{
@@ -232,21 +234,22 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 		},
 	})
 	model = m.(Model)
-	view := model.View()
-	for _, want := range []string{"api", "worker", "CPU Usage", "Memory Usage", "Red (RX/TX)", "128.0MB"} {
-		if !strings.Contains(view, want) {
+	metricsView := model.View()
+	for _, want := range []string{"CPU Usage", "Memory Usage", "Red (RX/TX)", "Disco I/O", "128.0MB"} {
+		if !strings.Contains(metricsView, want) {
 			t.Errorf("container metrics view missing %q", want)
 		}
 	}
-	// Focus main inspector pane and scroll down to inspect ports/networks/mounts.
-	model = key(model, "tab")
-	for range 8 {
-		model = key(model, "j")
+	model = key(model, "m") // switch active chart metric to Memoria %
+	if model.metricKind != MetricMem {
+		t.Errorf("metricKind = %v, want MetricMem", model.metricKind)
 	}
-	scrolledView := model.View()
-	for _, want := range []string{"8080", "172.17.0.2", "apidata"} {
-		if !strings.Contains(scrolledView, want) {
-			t.Errorf("scrolled container details view missing %q", want)
+
+	model = key(model, "right") // switch to TabDetails
+	view := model.View()
+	for _, want := range []string{"api", "worker", "8080", "172.17.0.2", "apidata", "128.0MB"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("container details view missing %q", want)
 		}
 	}
 

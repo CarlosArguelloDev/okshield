@@ -34,13 +34,14 @@ type Tab int
 
 const (
 	TabSummary Tab = iota
+	TabMetrics
 	TabDetails
 	TabLogs
 	TabDiagnose
 	tabCount
 )
 
-var tabNames = [...]string{"Resumen", "Métricas/Detalles", "Logs", "Diagnóstico"}
+var tabNames = [...]string{"Resumen", "Métricas", "Detalles", "Logs", "Diagnóstico"}
 
 func (t Tab) String() string { return tabNames[t] }
 
@@ -104,6 +105,7 @@ type Model struct {
 	tab        Tab
 	focus      Focus
 	cursor     int
+	metricKind MetricKind
 	mainScroll int
 	procScroll int
 	metaScroll int
@@ -278,5 +280,5 @@ func (m *Model) recordMetrics(id string, st docker.Stats, at time.Time) {
 		series = &MetricSeries{}
 		m.history[id] = series
 	}
-	series.Push(st.CPUPercent, st.MemPercent, st.NetRxBytes, st.NetTxBytes, at)
+	series.PushFull(st.CPUPercent, st.MemPercent, st.NetRxBytes, st.NetTxBytes, st.BlkReadBytes, st.BlkWriteBytes, at)
 }

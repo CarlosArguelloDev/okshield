@@ -26,7 +26,169 @@ func (k kv) section(title string) {
 	k.b.WriteString("\n" + k.s.Title.Render(title) + "\n")
 }
 
-// renderDetails renders the Métricas/Detalles tab for the current selection.
+// renderMetrics renders the dedicated Métricas tab with a large multi-row
+// Unicode Braille chart and interactive metric selector (CPU, Memoria, Red, Disco).
+func (m Model) renderMetrics(bodyRows int) string {
+	s := m.styles
+	var b strings.Builder
+
+	target, hasTarget := m.selectedContainer()
+	if !hasTarget {
+		for _, c := range m.containers {
+			if c.State == "running" {
+				target = c
+				hasTarget = true
+				break
+			}
+		}
+		if !hasTarget && len(m.containers) > 0 {
+			target = m.containers[0]
+			hasTarget = true
+		}
+	}
+	if !hasTarget {
+		return s.Muted.Render("Sin contenedores activos para graficar métricas en tiempo real.")
+	}
+
+	h := containerHealth(target)
+	badge := s.StatusGlyph(h)
+	if h == HealthError {
+		badge = s.StatusBadge(HealthError, GlyphDown)
+	}
+	fmt.Fprintf(&b, "%s %s  %s\n",
+		badge,
+		s.Title.Render("Métricas en Tiempo Real · "+target.Name),
+		s.Muted.Render("(↑/↓ con foco o 'm' cambia gráfica)"),
+	)
+
+	// Metric selector pills.
+	var pills []string
+	for k := MetricKind(0); k < metricKindCount; k++ {
+		if k == m.metricKind {
+			pills = append(pills, s.StatusBadge(HealthInfo, " ▸ "+k.String()+" "))
+		} else {
+			pills = append(pills, s.Muted.Render("["+k.String()+"]"))
+		}
+	}
+	b.WriteString(strings.Join(pills, "  ") + "\n\n")
+
+	var cpuHist, memHist, netHist, diskHist []float64
+	var rxRate, txRate float64
+	if ser, ok := m.history[target.ID]; ok {
+		cpuHist = ser.Samples(MetricCPU, make([]float64, 0, HistoryCapacity))
+		memHist = ser.Samples(MetricMem, make([]float64, 0, HistoryCapacity))
+		netHist = ser.Samples(MetricNet, make([]float64, 0, HistoryCapacity))
+		diskHist = ser.Samples(MetricDisk, make([]float64, 0, HistoryCapacity))
+		rxRate, txRate = ser.NetRates()
+	}
+	if len(cpuHist) == 0 && m.stats.CPUPercent > 0 {
+		cpuHist = []float64{m.stats.CPUPercent}
+		memHist = []float64{m.stats.MemPercent}
+	}
+
+	var activeSeries []float64
+	maxVal := 100.0
+	chartStyle := s.Title
+	switch m.metricKind {
+	case MetricMem:
+		activeSeries = memHist
+		chartStyle = s.Key
+	case MetricNet:
+		activeSeries = netHist
+		maxVal = maxSeriesVal(netHist, 1024.0)
+		chartStyle = s.OK
+	case MetricDisk:
+		activeSeries = diskHist
+		maxVal = maxSeriesVal(diskHist, 1024.0)
+		chartStyle = s.Warn
+	default:
+		activeSeries = cpuHist
+		chartStyle = s.Title
+	}
+
+	sideW := max(minSidebarW, m.width/6)
+	remW := max(20, m.width-sideW)
+	inspectorW := max(20, remW-max(24, remW*26/100))
+	chartW := clampInt(inspectorW-18, 24, 54)
+	chartH := clampInt(bodyRows-10, 6, 11)
+
+	rows := BrailleChart(activeSeries, chartW, chartH, maxVal)
+	for r, line := range rows {
+		var yLabel string
+		switch {
+		case r == 0:
+			yLabel = FormatMetricAxis(m.metricKind, maxVal)
+		case r == chartH/2:
+			yLabel = FormatMetricAxis(m.metricKind, maxVal*0.5)
+		case r == chartH-1:
+			yLabel = FormatMetricAxis(m.metricKind, 0)
+		default:
+			yLabel = "       "
+		}
+		fmt.Fprintf(&b, "%s %s%s\n",
+			s.Muted.Render(yLabel),
+			s.Muted.Render("┤"),
+			chartStyle.Render(line),
+		)
+	}
+	xAxis := "       └" + strings.Repeat("─", chartW)
+	b.WriteString(s.Muted.Render(xAxis) + "\n")
+	timeSpan := max(4, chartW-10)
+	b.WriteString(s.Muted.Render("        -60s"+strings.Repeat(" ", timeSpan)+"ahora") + "\n\n")
+
+	memLim := m.stats.MemLimit
+	if memLim == 0 && m.detail.ID == target.ID && m.detail.MemoryLimit > 0 {
+		memLim = uint64(m.detail.MemoryLimit)
+	}
+
+	k := kv{b: &b, s: s}
+	k.row(metricCursor(m.metricKind == MetricCPU, "CPU Usage"), fmt.Sprintf("%s %5.1f%%  %s  %s",
+		m.cpuBar.ViewAs(clamp01(m.stats.CPUPercent/100.0)),
+		m.stats.CPUPercent,
+		s.Title.Render(BrailleSparkline(cpuHist, 16, 100.0)),
+		s.Muted.Render(fmt.Sprintf("throt:%d", m.stats.Throttled)),
+	))
+	k.row(metricCursor(m.metricKind == MetricMem, "Memory Usage"), fmt.Sprintf("%s %s / %s (%4.1f%%)  %s",
+		m.memBar.ViewAs(clamp01(m.stats.MemPercent/100.0)),
+		humanBytes(m.stats.MemUsage),
+		humanBytes(memLim),
+		m.stats.MemPercent,
+		s.Key.Render(BrailleSparkline(memHist, 16, 100.0)),
+	))
+	k.row(metricCursor(m.metricKind == MetricNet, "Red (RX/TX)"), fmt.Sprintf("↓ %s (%s/s) · ↑ %s (%s/s)  %s",
+		humanBytes(m.stats.NetRxBytes),
+		humanBytes(uint64(rxRate)),
+		humanBytes(m.stats.NetTxBytes),
+		humanBytes(uint64(txRate)),
+		s.OK.Render(BrailleSparkline(netHist, 16, 0)),
+	))
+	k.row(metricCursor(m.metricKind == MetricDisk, "Disco I/O"), fmt.Sprintf("lect %s · escr %s · PIDs %d  %s",
+		humanBytes(m.stats.BlkReadBytes),
+		humanBytes(m.stats.BlkWriteBytes),
+		m.stats.PIDs,
+		s.Warn.Render(BrailleSparkline(diskHist, 16, 0)),
+	))
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func metricCursor(active bool, label string) string {
+	if active {
+		return "▸ " + label
+	}
+	return "  " + label
+}
+
+func maxSeriesVal(xs []float64, floor float64) float64 {
+	m := floor
+	for _, v := range xs {
+		if v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+// renderDetails renders the Detalles tab for the current selection.
 func (m Model) renderDetails() string {
 	if m.itemCount() == 0 {
 		return m.styles.Muted.Render("sin selección")
@@ -56,28 +218,6 @@ func (m Model) generalDetails(k kv) {
 	k.row("redes", strconv.Itoa(len(m.networks)))
 	k.row("volúmenes", strconv.Itoa(len(m.volumes)))
 
-	var cpuBuf, memBuf [HistoryCapacity]float64
-	for _, c := range m.containers {
-		if ser, ok := m.history[c.ID]; ok {
-			cs := ser.CPUSamples(make([]float64, 0, HistoryCapacity))
-			ms := ser.MemSamples(make([]float64, 0, HistoryCapacity))
-			k.section("Métricas en Tiempo Real · " + c.Name)
-			k.row("CPU Usage", fmt.Sprintf("%s %5.1f%%  %s",
-				m.cpuBar.ViewAs(clamp01(lastVal(cs)/100.0)),
-				lastVal(cs),
-				s.Title.Render(BrailleSparkline(cs, 20, 100.0)),
-			))
-			k.row("Mem Usage", fmt.Sprintf("%s %5.1f%%  %s",
-				m.memBar.ViewAs(clamp01(lastVal(ms)/100.0)),
-				lastVal(ms),
-				s.Key.Render(BrailleSparkline(ms, 20, 100.0)),
-			))
-			_ = cpuBuf
-			_ = memBuf
-			break
-		}
-	}
-
 	if len(m.containers) > 0 {
 		k.section("Contenedores")
 		for _, c := range m.containers {
@@ -97,58 +237,8 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 	k.row("imagen", c.Image)
 	k.row("estado", c.Status)
 
-	var cpuHist, memHist []float64
-	var rxRate, txRate float64
-	if ser, ok := m.history[c.ID]; ok {
-		cpuHist = ser.CPUSamples(make([]float64, 0, HistoryCapacity))
-		memHist = ser.MemSamples(make([]float64, 0, HistoryCapacity))
-		rxRate, txRate = ser.NetRates()
-	}
-	if len(cpuHist) == 0 && m.detail.ID == c.ID && m.detail.Running {
-		cpuHist = []float64{m.stats.CPUPercent}
-		memHist = []float64{m.stats.MemPercent}
-	}
-
-	memLim := m.stats.MemLimit
-	if memLim == 0 && m.detail.ID == c.ID && m.detail.MemoryLimit > 0 {
-		memLim = uint64(m.detail.MemoryLimit)
-	}
-
-	k.section("Métricas en Tiempo Real (Braille 60s)")
-	cpuSpark := s.Title.Render(BrailleSparkline(cpuHist, 24, 100.0))
-	memSpark := s.Key.Render(BrailleSparkline(memHist, 24, 100.0))
-	k.row("CPU Usage", fmt.Sprintf("%s %5.1f%%  %s  %s",
-		m.cpuBar.ViewAs(clamp01(m.stats.CPUPercent/100.0)),
-		m.stats.CPUPercent,
-		cpuSpark,
-		s.Muted.Render(fmt.Sprintf("throt:%d", m.stats.Throttled)),
-	))
-	k.row("Memory Usage", fmt.Sprintf("%s %s / %s (%4.1f%%)  %s",
-		m.memBar.ViewAs(clamp01(m.stats.MemPercent/100.0)),
-		humanBytes(m.stats.MemUsage),
-		humanBytes(memLim),
-		m.stats.MemPercent,
-		memSpark,
-	))
-	k.row("Red (RX/TX)", fmt.Sprintf("↓ %s (%s/s)  ·  ↑ %s (%s/s)",
-		humanBytes(m.stats.NetRxBytes),
-		humanBytes(uint64(rxRate)),
-		humanBytes(m.stats.NetTxBytes),
-		humanBytes(uint64(txRate)),
-	))
-	k.row("Bloque I/O", fmt.Sprintf("lectura %s  ·  escritura %s  ·  PIDs %d",
-		humanBytes(m.stats.BlkReadBytes),
-		humanBytes(m.stats.BlkWriteBytes),
-		m.stats.PIDs,
-	))
-	if m.receiver != nil {
-		ost := m.receiver.Stats()
-		k.row("OTel Ingest", fmt.Sprintf("%d logs en ring buffer (total: %d)", ost.RingLen, ost.TotalIngested))
-	}
-
 	d := m.detail
 	if d.ID == c.ID {
-		k.section("Inspección de Contenedor")
 		if d.OOMKilled {
 			k.row("OOMKilled", s.StatusBadge(HealthError, GlyphError)+" sí")
 		}
@@ -271,11 +361,4 @@ func clamp01(v float64) float64 {
 		return 1
 	}
 	return v
-}
-
-func lastVal(xs []float64) float64 {
-	if len(xs) == 0 {
-		return 0
-	}
-	return xs[len(xs)-1]
 }

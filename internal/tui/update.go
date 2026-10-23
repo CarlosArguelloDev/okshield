@@ -134,6 +134,11 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.dispatch(Command{Kind: CmdWhatsup, Name: "whatsup"})
 	case "d":
 		return m.dispatch(Command{Kind: CmdDiagnose, Name: "diagnose"})
+	case "m", " ":
+		if m.tab == TabMetrics {
+			m.metricKind = (m.metricKind + 1) % metricKindCount
+			return m, nil
+		}
 	case "1":
 		return m.dispatch(Command{Kind: CmdContainers})
 	case "2":
@@ -155,7 +160,9 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		switch m.focus {
 		case FocusMain:
-			if m.mainScroll > 0 {
+			if m.tab == TabMetrics {
+				m.metricKind = (m.metricKind + metricKindCount - 1) % metricKindCount
+			} else if m.mainScroll > 0 {
 				m.mainScroll--
 			}
 		case FocusProcesses:
@@ -177,13 +184,17 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		switch m.focus {
 		case FocusMain:
-			botH := bottomH
-			if m.height < 20 {
-				botH = max(5, m.height/3)
-			}
-			bodyRows := max(1, max(6, m.height-botH)-4)
-			if maxOff := max(0, countLines(m.inspectorBody(bodyRows))-bodyRows); m.mainScroll < maxOff {
-				m.mainScroll++
+			if m.tab == TabMetrics {
+				m.metricKind = (m.metricKind + 1) % metricKindCount
+			} else {
+				botH := bottomH
+				if m.height < 20 {
+					botH = max(5, m.height/3)
+				}
+				bodyRows := max(1, max(6, m.height-botH)-4)
+				if maxOff := max(0, countLines(m.inspectorBody(bodyRows))-bodyRows); m.mainScroll < maxOff {
+					m.mainScroll++
+				}
 			}
 		case FocusProcesses:
 			if m.procScroll < max(0, len(m.containers)+2) {
