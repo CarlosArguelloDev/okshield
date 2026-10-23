@@ -59,7 +59,7 @@ func TestMetricSeriesRingBuffer(t *testing.T) {
 	var ms MetricSeries
 	t0 := time.Now()
 	for i := 0; i < HistoryCapacity+10; i++ {
-		ms.Push(float64(i), float64(i*2), uint64(i*1024), uint64(i*512), t0.Add(time.Duration(i)*time.Second))
+		ms.PushFull(float64(i), float64(i*2), uint64(i*1024), uint64(i*512), uint64(i*2048), uint64(i*1024), t0.Add(time.Duration(i)*time.Second))
 	}
 	cpu := ms.CPUSamples(make([]float64, 0, HistoryCapacity))
 	if len(cpu) != HistoryCapacity {
@@ -71,6 +71,15 @@ func TestMetricSeriesRingBuffer(t *testing.T) {
 	rx, tx := ms.NetRates()
 	if rx != 1024 || tx != 512 {
 		t.Errorf("rates = (%v, %v), want (1024, 512)", rx, tx)
+	}
+	rows := BrailleChart(cpu, 12, 6, 100)
+	if len(rows) != 6 {
+		t.Fatalf("BrailleChart rows = %d, want 6", len(rows))
+	}
+	for i, r := range rows {
+		if utf8.RuneCountInString(r) != 12 {
+			t.Errorf("row %d rune count = %d, want 12", i, utf8.RuneCountInString(r))
+		}
 	}
 }
 
