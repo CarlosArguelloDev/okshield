@@ -88,10 +88,11 @@ func TestMetricSeriesRingBuffer(t *testing.T) {
 		}
 	}
 
-	// Verify SmoothSeries softens an abrupt step [0, 0, 100, 100] into gradual transitions.
-	sm := SmoothSeries([]float64{0, 0, 100, 100})
-	if len(sm) != 4 || sm[1] <= 0 || sm[1] >= 100 || sm[2] <= sm[1] {
-		t.Errorf("SmoothSeries failed to smooth step transition: %v", sm)
+	// Verify interpolateCanvas preserves exact raw endpoints while linearly
+	// interpolating intermediate Braille dot columns.
+	ramp := interpolateCanvas([]float64{20, 80}, 4)
+	if len(ramp) != 4 || ramp[1] != 20 || ramp[2] != 50 || ramp[3] != 80 {
+		t.Errorf("interpolateCanvas failed to preserve raw endpoints with linear midpoint: %v", ramp)
 	}
 }
 

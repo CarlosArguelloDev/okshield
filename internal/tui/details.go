@@ -150,7 +150,7 @@ func (m Model) renderMetrics(bodyRows int) string {
 	k.row(metricCursor(m.metricKind == MetricCPU, "CPU Usage"), fmt.Sprintf("%s %5.1f%%  %s  %s",
 		m.cpuBar.ViewAs(clamp01(m.stats.CPUPercent/100.0)),
 		m.stats.CPUPercent,
-		s.Title.Render(BrailleSparkline(SmoothSeries(cpuHist), 16, 100.0)),
+		s.Title.Render(BrailleSparkline(cpuHist, 16, 100.0)),
 		s.Muted.Render(fmt.Sprintf("throt:%d", m.stats.Throttled)),
 	))
 	k.row(metricCursor(m.metricKind == MetricMem, "Memory Usage"), fmt.Sprintf("%s %s / %s (%4.1f%%)  %s",
@@ -158,20 +158,20 @@ func (m Model) renderMetrics(bodyRows int) string {
 		humanBytes(m.stats.MemUsage),
 		humanBytes(memLim),
 		m.stats.MemPercent,
-		s.Key.Render(BrailleSparkline(SmoothSeries(memHist), 16, 100.0)),
+		s.Key.Render(BrailleSparkline(memHist, 16, 100.0)),
 	))
 	k.row(metricCursor(m.metricKind == MetricNet, "Red (RX/TX)"), fmt.Sprintf("↓ %s (%s/s) · ↑ %s (%s/s)  %s",
 		humanBytes(m.stats.NetRxBytes),
 		humanBytes(uint64(rxRate)),
 		humanBytes(m.stats.NetTxBytes),
 		humanBytes(uint64(txRate)),
-		s.OK.Render(BrailleSparkline(SmoothSeries(netHist), 16, maxSeriesVal(netHist, 1024.0))),
+		s.OK.Render(BrailleSparkline(netHist, 16, maxSeriesVal(netHist, 1024.0))),
 	))
 	k.row(metricCursor(m.metricKind == MetricDisk, "Disco I/O"), fmt.Sprintf("lect %s · escr %s · PIDs %d  %s",
 		humanBytes(m.stats.BlkReadBytes),
 		humanBytes(m.stats.BlkWriteBytes),
 		m.stats.PIDs,
-		s.Warn.Render(BrailleSparkline(SmoothSeries(diskHist), 16, maxSeriesVal(diskHist, 1024.0))),
+		s.Warn.Render(BrailleSparkline(diskHist, 16, maxSeriesVal(diskHist, 1024.0))),
 	))
 	return strings.TrimRight(b.String(), "\n")
 }

@@ -37,79 +37,48 @@ var (
 	brailleDotRight = [4]rune{0x08, 0x10, 0x20, 0x80}
 )
 
-// SmoothSeries applies a fast 3-point moving average (max window n=3) so spikes
-// transition smoothly without introducing multi-sample lag at the real-time edge.
-func SmoothSeries(values []float64) []float64 {
-	n := len(values)
-	if n == 0 {
+// interpolateCanvas maps raw telemetry samples onto `targetDots` horizontal
+// Braille dot columns using pure linear interpolation between consecutive raw
+// points. Raw sample values at their anchor columns remain 100% unaltered while
+// intermediate dot columns form a continuous linear ramp.
+func interpolateCanvas(raw []float64, targetDots int) []float64 {
+	if targetDots <= 0 {
 		return nil
 	}
-	out := make([]float64, n)
-	if n == 1 {
-		out[0] = values[0]
-		return out
-	}
-
-	// Strictly max 3 points per sample (i-1, i, i+1), keeping the latest sample
-	// responsive to real-time changes.
-	for i := 0; i < n; i++ {
-		if i == n-1 {
-			// Real-time rightmost point: blend 70% current + 30% previous (max 2 pts)
-			// so the live edge reacts immediately.
-			out[i] = 0.70*values[i] + 0.30*values[i-1]
-			continue
-		}
-		prev := values[max(0, i-1)]
-		curr := values[i]
-		next := values[min(n-1, i+1)]
-		out[i] = (prev + 2.0*curr + next) * 0.25
-	}
-	return out
-}
-
-// interpolateWave maps the 3-point smoothed series to `targetPoints` horizontal
-// dot columns, anchoring the newest sample directly at the rightmost column
-// ("ahora") for zero-latency visual feedback.
-func interpolateWave(values []float64, targetPoints int) []float64 {
-	if targetPoints <= 0 {
-		return nil
-	}
-	smoothed := SmoothSeries(values)
-	n := len(smoothed)
-	out := make([]float64, targetPoints)
+	n := len(raw)
+	out := make([]float64, targetDots)
 	if n == 0 {
 		return out
 	}
 	if n == 1 {
 		for i := range out {
-			out[i] = smoothed[0]
+			out[i] = raw[0]
 		}
 		return out
 	}
 
-	// 2 horizontal Braille dots (1 character cell) per sample, with the latest
-	// value pinned at the rightmost dot column.
+	// Each raw 1s sample spans 2 horizontal Braille dot columns (1 character),
+	// right-aligned so the newest raw value sits at `targetDots - 1`.
 	const dotsPerSample = 2.0
 	totalSpan := float64(n-1) * dotsPerSample
-	startOffset := float64(targetPoints-1) - totalSpan
+	startOffset := float64(targetDots-1) - totalSpan
 
-	for x := 0; x < targetPoints; x++ {
+	for x := 0; x < targetDots; x++ {
 		rel := float64(x) - startOffset
 		if rel <= 0 {
-			out[x] = smoothed[0]
+			out[x] = raw[0]
 			continue
 		}
 		pos := rel / dotsPerSample
 		i0 := int(math.Floor(pos))
 		if i0 >= n-1 {
-			out[x] = values[n-1]
+			out[x] = raw[n-1]
 			continue
 		}
 		frac := pos - float64(i0)
-		out[x] = smoothed[i0]*(1.0-frac) + smoothed[i0+1]*frac
+		out[x] = raw[i0]*(1.0-frac) + raw[i0+1]*frac
 	}
-	// Pin the rightmost dot to the latest sample so there is zero render lag.
-	out[targetPoints-1] = values[n-1]
+	out[targetDots-1] = raw[n-1]
 	return out
 }
 
@@ -195,7 +164,7 @@ func BrailleChart(values []float64, width, height int, maxVal float64) []string 
 		return out
 	}
 
-	wave := interpolateWave(values, totalDotsX)
+	wave := interpolateCanvas(values, totalDotsX)
 
 	yTopFor := func(v float64) int {
 		if v <= 0 || maxVal <= 0 {
@@ -227,13 +196,26 @@ func BrailleChart(values []float64, width, height int, maxVal float64) []string 
 	for x := 0; x < totalDotsX; x++ {
 		curY := yTopFor(wave[x])
 		setDot(x, curY)
-		if curY < prevY-1 {
-			for y := curY + 1; y < prevY; y++ {
-				setDot(x, y)
-			}
-		} else if curY > prevY+1 {
-			for y := prevY + 1; y < curY; y++ {
-				setDot(x, y)
+		// Split steep slopes at the midpoint across (x-1, x) so transitions
+		// draw a diagonal ramp across the 2x4 Braille matrix instead of a
+		// vertical step wall.
+		if x > 0 {
+			if curY < prevY-1 {
+				midY := (prevY + curY) / 2
+				for y := prevY - 1; y > midY; y-- {
+					setDot(x-1, y)
+				}
+				for y := midY; y > curY; y-- {
+					setDot(x, y)
+				}
+			} else if curY > prevY+1 {
+				midY := (prevY + curY) / 2
+				for y := prevY + 1; y < midY; y++ {
+					setDot(x-1, y)
+				}
+				for y := midY; y < curY; y++ {
+					setDot(x, y)
+				}
 			}
 		}
 		prevY = curY
