@@ -83,6 +83,8 @@ type Options struct {
 	Store *telemetry.Store
 	// Receiver is the embedded OTLP receiver.
 	Receiver *telemetry.Receiver
+	// Lang sets the initial display language (LangES by default).
+	Lang Lang
 }
 
 // Model is the root Bubble Tea model of OkShield.
@@ -105,6 +107,7 @@ type Model struct {
 	tab        Tab
 	focus      Focus
 	cursor     int
+	lang       Lang
 	metricKind MetricKind
 	mainScroll int
 	procScroll int
@@ -180,6 +183,7 @@ func New(opts Options) Model {
 		receiver: opts.Receiver,
 		hostname: host,
 		otel:     otelState,
+		lang:     opts.Lang,
 		history:  make(map[string]*MetricSeries),
 		cpuBar:   cpuBar,
 		memBar:   memBar,

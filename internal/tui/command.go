@@ -14,6 +14,7 @@ const (
 	CmdVolumes
 	CmdOtelStatus
 	CmdPruneTelemetry
+	CmdLang
 	CmdHelp
 	CmdQuit
 )
@@ -28,24 +29,26 @@ type Command struct {
 
 // commandSpec describes a command for parsing and help rendering.
 type commandSpec struct {
-	Kind    CommandKind
-	Names   []string // first is canonical, the rest are aliases
-	Usage   string
-	Summary string
-	Key     string
+	Kind      CommandKind
+	Names     []string // first is canonical, the rest are aliases
+	Usage     string
+	Summary   string
+	SummaryEN string
+	Key       string
 }
 
 // commandTable is the single source of truth for available commands.
 var commandTable = []commandSpec{
-	{CmdWhatsup, []string{"whatsup", "pulse"}, "/whatsup", "Resumen determinista de lo que ocurre", "?"},
-	{CmdDiagnose, []string{"diagnose", "diag"}, "/diagnose [container]", "Clasifica la causa raíz y muestra el runbook", "d"},
-	{CmdContainers, []string{"containers", "c"}, "/containers", "Vista de contenedores", "1"},
-	{CmdNetworks, []string{"networks", "n"}, "/networks", "Vista de redes", "2"},
-	{CmdVolumes, []string{"volumes", "v"}, "/volumes", "Vista de volúmenes", "3"},
-	{CmdOtelStatus, []string{"otel"}, "/otel status", "Estado del receptor OTLP y DuckDB", ""},
-	{CmdPruneTelemetry, []string{"prune-telemetry", "prune"}, "/prune-telemetry", "Borra telemetría antigua en DuckDB", ""},
-	{CmdHelp, []string{"help", "h"}, "/help", "Muestra esta ayuda", ""},
-	{CmdQuit, []string{"quit", "q", "exit"}, "/quit", "Salir de OkShield", "ctrl+c"},
+	{CmdWhatsup, []string{"whatsup", "pulse"}, "/whatsup", "Resumen determinista de lo que ocurre", "Deterministic summary of container health", "?"},
+	{CmdDiagnose, []string{"diagnose", "diag"}, "/diagnose [container]", "Clasifica la causa raíz y muestra el runbook", "Classify root cause and show runbook", "d"},
+	{CmdContainers, []string{"containers", "c"}, "/containers", "Vista de contenedores", "Containers view", "1"},
+	{CmdNetworks, []string{"networks", "n"}, "/networks", "Vista de redes", "Networks view", "2"},
+	{CmdVolumes, []string{"volumes", "v"}, "/volumes", "Vista de volúmenes", "Volumes view", "3"},
+	{CmdOtelStatus, []string{"otel"}, "/otel status", "Estado del receptor OTLP y DuckDB", "OTLP receiver and DuckDB status", ""},
+	{CmdPruneTelemetry, []string{"prune-telemetry", "prune"}, "/prune-telemetry", "Borra telemetría antigua en DuckDB", "Prune old telemetry in DuckDB", ""},
+	{CmdLang, []string{"lang", "language", "idioma"}, "/lang [es|en]", "Cambia el idioma entre Español e Inglés", "Switch language between Spanish and English", "i"},
+	{CmdHelp, []string{"help", "h"}, "/help", "Muestra esta ayuda", "Show this help overlay", ""},
+	{CmdQuit, []string{"quit", "q", "exit"}, "/quit", "Salir de OkShield", "Exit OkShield", "ctrl+c"},
 }
 
 // ParseCommand parses a command bar input such as "/diagnose api". The
