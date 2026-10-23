@@ -33,6 +33,7 @@ func (k kv) section(title string) {
 // Unicode Braille chart and interactive metric selector (CPU, Memoria, Red, Disco).
 func (m Model) renderMetrics(bodyRows int) string {
 	s := m.styles
+	tr := m.tr()
 	var b strings.Builder
 
 	target, hasTarget := m.selectedContainer()
@@ -50,7 +51,7 @@ func (m Model) renderMetrics(bodyRows int) string {
 		}
 	}
 	if !hasTarget {
-		return s.Muted.Render("Sin contenedores activos para graficar métricas en tiempo real.")
+		return s.Muted.Render(tr.MetricsNoContainers)
 	}
 
 	h := containerHealth(target)
@@ -60,17 +61,18 @@ func (m Model) renderMetrics(bodyRows int) string {
 	}
 	fmt.Fprintf(&b, "%s %s  %s\n",
 		badge,
-		s.Title.Render("Métricas en Tiempo Real · "+target.Name),
-		s.Muted.Render("(↑/↓ con foco o 'm' cambia gráfica)"),
+		s.Title.Render(tr.MetricsTitlePrefix+target.Name),
+		s.Muted.Render(tr.MetricsSwitchHint),
 	)
 
 	// Metric selector pills.
 	var pills []string
 	for k := MetricKind(0); k < metricKindCount; k++ {
+		label := tr.Metrics[k]
 		if k == m.metricKind {
-			pills = append(pills, s.StatusBadge(HealthInfo, " ▸ "+k.String()+" "))
+			pills = append(pills, s.StatusBadge(HealthInfo, " ▸ "+label+" "))
 		} else {
-			pills = append(pills, s.Muted.Render("["+k.String()+"]"))
+			pills = append(pills, s.Muted.Render("["+label+"]"))
 		}
 	}
 	b.WriteString(strings.Join(pills, "  ") + "\n\n")
@@ -138,8 +140,8 @@ func (m Model) renderMetrics(bodyRows int) string {
 	}
 	xAxis := strings.Repeat(" ", 10) + "└" + strings.Repeat("─", chartW)
 	b.WriteString(s.Muted.Render(xAxis) + "\n")
-	timeSpan := max(2, chartW-8)
-	b.WriteString(s.Muted.Render(strings.Repeat(" ", 10)+"-60s"+strings.Repeat(" ", timeSpan)+"ahora") + "\n\n")
+	timeSpan := max(2, chartW-4-len(tr.MetricsNow))
+	b.WriteString(s.Muted.Render(strings.Repeat(" ", 10)+"-60s"+strings.Repeat(" ", timeSpan)+tr.MetricsNow) + "\n\n")
 
 	memLim := m.stats.MemLimit
 	if memLim == 0 && m.detail.ID == target.ID && m.detail.MemoryLimit > 0 {
@@ -160,15 +162,17 @@ func (m Model) renderMetrics(bodyRows int) string {
 		m.stats.MemPercent,
 		s.Key.Render(BrailleSparkline(memHist, 16, 100.0)),
 	))
-	k.row(metricCursor(m.metricKind == MetricNet, "Red (RX/TX)"), fmt.Sprintf("↓ %s (%s/s) · ↑ %s (%s/s)  %s",
+	k.row(metricCursor(m.metricKind == MetricNet, tr.Metrics[MetricNet]), fmt.Sprintf("↓ %s (%s/s) · ↑ %s (%s/s)  %s",
 		humanBytes(m.stats.NetRxBytes),
 		humanBytes(uint64(rxRate)),
 		humanBytes(m.stats.NetTxBytes),
 		humanBytes(uint64(txRate)),
 		s.OK.Render(BrailleSparkline(netHist, 16, maxSeriesVal(netHist, 1024.0))),
 	))
-	k.row(metricCursor(m.metricKind == MetricDisk, "Disco I/O"), fmt.Sprintf("lect %s · escr %s · PIDs %d  %s",
+	k.row(metricCursor(m.metricKind == MetricDisk, tr.Metrics[MetricDisk]), fmt.Sprintf("%s %s · %s %s · PIDs %d  %s",
+		tr.MetricsRead,
 		humanBytes(m.stats.BlkReadBytes),
+		tr.MetricsWrite,
 		humanBytes(m.stats.BlkWriteBytes),
 		m.stats.PIDs,
 		s.Warn.Render(BrailleSparkline(diskHist, 16, maxSeriesVal(diskHist, 1024.0))),
@@ -196,7 +200,7 @@ func maxSeriesVal(xs []float64, floor float64) float64 {
 // renderDetails renders the Detalles tab for the current selection.
 func (m Model) renderDetails() string {
 	if m.itemCount() == 0 {
-		return m.styles.Muted.Render("sin selección")
+		return m.styles.Muted.Render(m.tr().NoSelection)
 	}
 	var b strings.Builder
 	k := kv{b: &b, s: m.styles}
@@ -217,14 +221,15 @@ func (m Model) renderDetails() string {
 
 func (m Model) generalDetails(k kv) {
 	s := m.styles
-	k.b.WriteString(s.StatusBadge(HealthInfo, " ALL ") + " " + s.Title.Render("Resumen General de Infraestructura") + "\n")
+	tr := m.tr()
+	k.b.WriteString(s.StatusBadge(HealthInfo, " ALL ") + " " + s.Title.Render(tr.GeneralSummaryTitle) + "\n")
 	k.row("host", m.hostname)
-	k.row("contenedores", strconv.Itoa(len(m.containers)))
-	k.row("redes", strconv.Itoa(len(m.networks)))
-	k.row("volúmenes", strconv.Itoa(len(m.volumes)))
+	k.row(tr.GeneralContainers, strconv.Itoa(len(m.containers)))
+	k.row(tr.GeneralNetworks, strconv.Itoa(len(m.networks)))
+	k.row(tr.GeneralVolumes, strconv.Itoa(len(m.volumes)))
 
 	if len(m.containers) > 0 {
-		k.section("Contenedores")
+		k.section(tr.Views[ViewContainers])
 		for _, c := range m.containers {
 			k.row(c.Name, c.Image+" · "+c.Status)
 		}
@@ -233,19 +238,20 @@ func (m Model) generalDetails(k kv) {
 
 func (m Model) containerDetails(k kv, c docker.Container) {
 	s := m.styles
+	tr := m.tr()
 	h := containerHealth(c)
 	badge := s.StatusGlyph(h)
 	if h == HealthError {
 		badge = s.StatusBadge(HealthError, GlyphDown)
 	}
 	k.b.WriteString(badge + " " + s.Title.Render(c.Name) + s.Muted.Render("  "+c.ShortID()) + "\n")
-	k.row("imagen", c.Image)
-	k.row("estado", c.Status)
+	k.row(tr.FieldImage, c.Image)
+	k.row(tr.FieldState, c.Status)
 
 	d := m.detail
 	if d.ID == c.ID {
 		if d.OOMKilled {
-			k.row("OOMKilled", s.StatusBadge(HealthError, GlyphError)+" sí")
+			k.row("OOMKilled", s.StatusBadge(HealthError, GlyphError)+" "+tr.Yes)
 		}
 		if !d.Running && !d.StartedAt.IsZero() {
 			k.row("exit code", strconv.Itoa(d.ExitCode))
@@ -253,15 +259,15 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 		if d.Error != "" {
 			k.row("error", d.Error)
 		}
-		k.row("reinicios", fmt.Sprintf("%d (política: %s)", d.RestartCount, orDash(d.RestartPolicy)))
+		k.row(tr.FieldRestarts, fmt.Sprintf("%d (%s: %s)", d.RestartCount, tr.FieldPolicy, orDash(d.RestartPolicy)))
 		if d.Health != "" {
 			k.row("health", d.Health)
 		}
 		if d.Running && !d.StartedAt.IsZero() {
 			k.row("uptime", time.Since(d.StartedAt).Truncate(time.Second).String())
 		}
-		k.row("límite RAM", limitStr(d.MemoryLimit, humanBytes(uint64(d.MemoryLimit))))
-		k.row("límite CPU", limitStr(d.NanoCPUs, fmt.Sprintf("%.2f cpu", float64(d.NanoCPUs)/1e9)))
+		k.row(tr.FieldRAMLimit, limitStr(d.MemoryLimit, humanBytes(uint64(d.MemoryLimit)), tr.NoLimit))
+		k.row(tr.FieldCPULimit, limitStr(d.NanoCPUs, fmt.Sprintf("%.2f cpu", float64(d.NanoCPUs)/1e9), tr.NoLimit))
 		k.row("cmd", strings.Join(d.Cmd, " "))
 		k.row("env vars", strconv.Itoa(d.EnvCount))
 	} else if m.detailErr != nil {
@@ -269,23 +275,23 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 	}
 
 	if len(c.Ports) > 0 {
-		k.section("Puertos")
+		k.section(tr.SectionPorts)
 		for _, p := range c.Ports {
 			if p.Public != 0 {
 				k.b.WriteString(fmt.Sprintf("  %s:%d → %d/%s\n", orDash(p.IP), p.Public, p.Private, p.Proto))
 			} else {
-				k.b.WriteString(fmt.Sprintf("  %d/%s (no publicado)\n", p.Private, p.Proto))
+				k.b.WriteString(fmt.Sprintf("  %d/%s (%s)\n", p.Private, p.Proto, tr.Unpublished))
 			}
 		}
 	}
 	if len(c.Networks) > 0 {
-		k.section("Redes")
+		k.section(tr.SectionNetworks)
 		for _, n := range c.Networks {
 			k.row(n.Network, n.IP)
 		}
 	}
 	if len(c.Mounts) > 0 {
-		k.section("Mounts")
+		k.section(tr.SectionMounts)
 		for _, mt := range c.Mounts {
 			src := mt.Source
 			if mt.Type == "volume" && mt.Name != "" {
@@ -301,14 +307,15 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 }
 
 func (m Model) networkDetails(k kv, n docker.Network) {
+	tr := m.tr()
 	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " NET ") + " " + m.styles.Title.Render(n.Name) + "\n")
 	k.row("driver", n.Driver)
 	k.row("scope", n.Scope)
-	k.row("interna", strconv.FormatBool(n.Internal))
+	k.row(tr.FieldInternal, strconv.FormatBool(n.Internal))
 	for _, sn := range n.Subnets {
 		k.row("subnet", sn.CIDR+"  gw "+orDash(sn.Gateway))
 	}
-	k.section("Contenedores conectados")
+	k.section(tr.ConnectedContainers)
 	found := false
 	for _, c := range m.containers {
 		for _, a := range c.Networks {
@@ -319,17 +326,18 @@ func (m Model) networkDetails(k kv, n docker.Network) {
 		}
 	}
 	if !found {
-		k.b.WriteString(m.styles.Muted.Render("  ninguno") + "\n")
+		k.b.WriteString(m.styles.Muted.Render(tr.None) + "\n")
 	}
 }
 
 func (m Model) volumeDetails(k kv, v docker.Volume) {
+	tr := m.tr()
 	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " VOL ") + " " + m.styles.Title.Render(v.Name) + "\n")
 	k.row("driver", v.Driver)
 	k.row("scope", v.Scope)
 	k.row("mountpoint", v.Mountpoint)
-	k.row("creado", v.CreatedAt)
-	k.section("Usado por")
+	k.row(tr.FieldCreated, v.CreatedAt)
+	k.section(tr.UsedBy)
 	found := false
 	for _, c := range m.containers {
 		for _, mt := range c.Mounts {
@@ -340,7 +348,7 @@ func (m Model) volumeDetails(k kv, v docker.Volume) {
 		}
 	}
 	if !found {
-		k.b.WriteString(m.styles.Muted.Render("  ningún contenedor (huérfano)") + "\n")
+		k.b.WriteString(m.styles.Muted.Render(tr.OrphanVolume) + "\n")
 	}
 }
 
@@ -351,9 +359,9 @@ func orDash(s string) string {
 	return s
 }
 
-func limitStr(v int64, formatted string) string {
+func limitStr(v int64, formatted, noLimit string) string {
 	if v <= 0 {
-		return "sin límite"
+		return noLimit
 	}
 	return formatted
 }

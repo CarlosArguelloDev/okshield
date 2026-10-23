@@ -17,7 +17,7 @@ const (
 // Bottom row: [Processes / Pulse] [Metadata] [Command / Telemetry]
 func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
-		return "iniciando okshield…"
+		return m.tr().Starting
 	}
 	if m.focus == FocusCommand || m.showHelp {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderHelp())
@@ -70,6 +70,7 @@ func (m Model) sectionDivider(title string, innerW int) string {
 
 func (m Model) renderSidebar(w, h int) string {
 	s := m.styles
+	tr := m.tr()
 	innerW := max(8, w-2)
 	var b strings.Builder
 
@@ -83,12 +84,12 @@ func (m Model) renderSidebar(w, h int) string {
 			cursor = s.Title.Render("> ")
 			style = s.Selected
 		}
-		fmt.Fprintf(&b, "%s%s %s\n", cursor, icons[i], style.Render(i.String()))
+		fmt.Fprintf(&b, "%s%s %s\n", cursor, icons[i], style.Render(tr.Views[i]))
 	}
 
 	b.WriteByte('\n')
 	b.WriteString(m.sectionDivider("Pinned", innerW) + "\n")
-	for idx, t := range tabNames {
+	for idx, t := range tr.Tabs {
 		cursor := "  "
 		st := s.Text
 		if Tab(idx) == m.tab {
@@ -105,17 +106,21 @@ func (m Model) renderSidebar(w, h int) string {
 		s.Muted.Render("dkr"), m.connGlyph(m.docker),
 		s.Muted.Render("otlp"), m.connGlyph(m.otel),
 	)
-	fmt.Fprintf(&b, "  %s %s\n\n", s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)))
+	fmt.Fprintf(&b, "  %s %s  %s %s\n\n",
+		s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)),
+		s.Muted.Render("lang"), s.StatusBadge(HealthInfo, " "+m.lang.Code()+" "),
+	)
 
 	controls := [][2]string{
-		{"↑/↓", "Scroll"},
-		{"1/2/3", "Views"},
-		{"←/→", "Tabs"},
-		{"tab", "Focus"},
-		{"?", "Whatsup"},
-		{"d", "Diagnose"},
-		{"/", "Command"},
-		{"q", "Quit"},
+		{"↑/↓", tr.CtrlScroll},
+		{"1/2/3", tr.CtrlViews},
+		{"←/→", tr.CtrlTabs},
+		{"tab", tr.CtrlFocus},
+		{"?", tr.CtrlWhatsup},
+		{"d", tr.CtrlDiagnose},
+		{"i", tr.CtrlLang + " (" + m.lang.Code() + ")"},
+		{"/", tr.CtrlCommand},
+		{"q", tr.CtrlQuit},
 	}
 	for i, kv := range controls {
 		fmt.Fprintf(&b, "  %s %s",
@@ -176,12 +181,14 @@ func (m Model) renderBrowser(w, h int) string {
 
 func (m Model) renderInspector(w, h int) string {
 	s := m.styles
+	tr := m.tr()
 	tabs := make([]string, 0, tabCount)
 	for t := Tab(0); t < tabCount; t++ {
+		label := tr.Tabs[t]
 		if t == m.tab {
-			tabs = append(tabs, s.Title.Render("▸ "+t.String()))
+			tabs = append(tabs, s.Title.Render("▸ "+label))
 		} else {
-			tabs = append(tabs, s.Muted.Render(t.String()))
+			tabs = append(tabs, s.Muted.Render(label))
 		}
 	}
 	header := strings.Join(tabs, s.Muted.Render(" │ "))
@@ -199,7 +206,7 @@ func (m Model) renderInspector(w, h int) string {
 		BorderColor: borderColor,
 		Header:      header,
 		Body:        body,
-		FootBadges:  []string{m.tab.String(), fmt.Sprintf("%d/%d", int(m.tab)+1, int(tabCount))},
+		FootBadges:  []string{tr.Tabs[m.tab], fmt.Sprintf("%d/%d", int(m.tab)+1, int(tabCount))},
 	})
 }
 
@@ -241,7 +248,7 @@ func (m Model) renderProcessesBox(w, h int) string {
 		}
 	}
 	if anomalies == 0 && b.Len() == 0 {
-		b.WriteString(s.StatusBadge(HealthOK, GlyphOK) + " " + s.Muted.Render("Sin anomalías activas (? para /whatsup)"))
+		b.WriteString(s.StatusBadge(HealthOK, GlyphOK) + " " + s.Muted.Render(m.tr().NoAnomalies))
 	}
 	bodyRows := max(1, h-2)
 	borderColor := ColorSecondary
@@ -311,7 +318,7 @@ func (m Model) renderMetadataBox(w, h int) string {
 		}
 	}
 	if fields == 0 {
-		b.WriteString(s.Muted.Render("Sin recurso seleccionado"))
+		b.WriteString(s.Muted.Render(m.tr().NoResource))
 	}
 	bodyRows := max(1, h-2)
 	borderColor := ColorSecondary
@@ -355,15 +362,16 @@ func (m Model) connGlyph(c ConnState) string {
 // `rows` lines and `w` columns.
 func (m Model) renderList(w, rows int) string {
 	s := m.styles
+	tr := m.tr()
 	n := m.itemCount()
 	if n == 0 {
 		if m.docker == ConnDown {
-			return s.StatusBadge(HealthError, GlyphDown) + " " + s.Err.Render("docker no disponible")
+			return s.StatusBadge(HealthError, GlyphDown) + " " + s.Err.Render(tr.DockerDown)
 		}
 		if m.docker == ConnUnknown {
-			return s.StatusGlyph(HealthInfo) + " " + s.Muted.Render("cargando…")
+			return s.StatusGlyph(HealthInfo) + " " + s.Muted.Render(tr.Loading)
 		}
-		return s.Muted.Render("(vacío)")
+		return s.Muted.Render(tr.Empty)
 	}
 	rows = max(1, rows)
 	start := 0
@@ -426,17 +434,18 @@ func truncate(str string, w int) string {
 
 func (m Model) renderHelp() string {
 	s := m.styles
+	tr := m.tr()
 	var b strings.Builder
 
-	b.WriteString(s.Title.Render("✦ Comandos de OkShield"))
+	b.WriteString(s.Title.Render(tr.HelpTitle))
 	b.WriteString("\n\n")
 
 	if m.focus == FocusCommand {
-		b.WriteString(s.Key.Render("Comando: ") + m.input.View())
+		b.WriteString(s.Key.Render(tr.HelpPromptLabel) + m.input.View())
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(m.sectionDivider("Comandos Disponibles", 62) + "\n")
+	b.WriteString(m.sectionDivider(tr.HelpAvailTitle, 62) + "\n")
 	matches := Suggest(m.input.Value())
 	matchSet := make(map[string]bool, len(matches))
 	for _, u := range matches {
@@ -454,7 +463,7 @@ func (m Model) renderHelp() string {
 	}
 	b.WriteString("  " + strings.Join(avail, s.Muted.Render("  ·  ")) + "\n\n")
 
-	b.WriteString(m.sectionDivider("Descripción y Detalles", 62) + "\n")
+	b.WriteString(m.sectionDivider(tr.HelpDescTitle, 62) + "\n")
 	for _, c := range commandTable {
 		key := c.Key
 		if key == "" {
@@ -464,16 +473,20 @@ func (m Model) renderHelp() string {
 		if m.focus == FocusCommand && m.input.Value() != "" && m.input.Value() != "/" && !matchSet[c.Usage] {
 			usageStyle = s.Muted
 		}
+		summary := c.Summary
+		if m.lang == LangEN && c.SummaryEN != "" {
+			summary = c.SummaryEN
+		}
 		fmt.Fprintf(&b, "  %s  %s  %s\n",
 			usageStyle.Render(fmt.Sprintf("%-22s", c.Usage)),
 			s.Warn.Render(fmt.Sprintf("%-7s", key)),
-			s.Text.Render(c.Summary))
+			s.Text.Render(summary))
 	}
 	b.WriteString("\n")
 	if m.focus == FocusCommand {
-		b.WriteString(s.Muted.Render("enter ejecutar  ·  tab autocompletar  ·  esc cerrar"))
+		b.WriteString(s.Muted.Render(tr.HelpFooterCmd))
 	} else {
-		b.WriteString(s.Muted.Render("pulsa cualquier tecla para cerrar"))
+		b.WriteString(s.Muted.Render(tr.HelpFooterAny))
 	}
 	return s.Overlay.Render(b.String())
 }

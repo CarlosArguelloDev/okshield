@@ -11,20 +11,21 @@ import (
 
 func (m Model) renderPulse(maxLines int) string {
 	s := m.styles
+	tr := m.tr()
 	if !m.hasPulse {
-		return s.Muted.Render("Pulsa ? o escribe /whatsup para sintetizar el estado de tus contenedores (sin IA).")
+		return s.Muted.Render(tr.PulseHint)
 	}
 	rep := m.pulse
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s  %s %d   %s %d   %s %d\n\n",
-		s.Title.Render("Pulso Determinista (/whatsup)"),
+		s.Title.Render(tr.PulseTitle),
 		s.StatusBadge(HealthOK, GlyphRunning), rep.Running,
 		s.StatusBadge(HealthDegraded, GlyphDegraded), rep.Degraded,
 		s.StatusBadge(HealthError, GlyphDown), rep.Failed,
 	)
 
 	if len(rep.Containers) == 0 {
-		b.WriteString(s.Muted.Render("No se encontraron contenedores en el host."))
+		b.WriteString(s.Muted.Render(tr.PulseNoContainers))
 		return b.String()
 	}
 
@@ -76,22 +77,23 @@ func (m Model) renderPulse(maxLines int) string {
 
 func (m Model) renderLogs(maxLines int) string {
 	s := m.styles
+	tr := m.tr()
 	var b strings.Builder
 
 	c, ok := m.selectedContainer()
 	if !ok {
-		b.WriteString(s.Muted.Render("Selecciona un contenedor para inspeccionar sus logs deduplicados."))
+		b.WriteString(s.Muted.Render(tr.LogsSelectHint))
 		return b.String()
 	}
 
 	fmt.Fprintf(&b, "%s %s %s\n",
-		s.Title.Render("Plantillas Drain-like"),
+		s.Title.Render(tr.LogsTitle),
 		s.Text.Render(c.Name),
-		s.Muted.Render(fmt.Sprintf("(%d líneas en ring buffer → %d patrones únicos)", len(m.logs), len(m.clusters))),
+		s.Muted.Render(fmt.Sprintf(tr.LogsRingCount, len(m.logs), len(m.clusters))),
 	)
 
 	if len(m.clusters) == 0 {
-		b.WriteString(s.Muted.Render("Sin logs recientes para este contenedor."))
+		b.WriteString(s.Muted.Render(tr.LogsEmpty))
 		return b.String()
 	}
 
@@ -99,7 +101,7 @@ func (m Model) renderLogs(maxLines int) string {
 		b.WriteString("  " + m.formatCluster(m.clusters[i]) + "\n")
 	}
 
-	b.WriteString("\n" + s.Title.Render("Últimas líneas (Ring Buffer)") + "\n")
+	b.WriteString("\n" + s.Title.Render(tr.LogsRecent) + "\n")
 	for _, line := range m.logs {
 		b.WriteString("  " + s.Muted.Render(truncate(line, max(20, m.width-40))) + "\n")
 	}
@@ -108,6 +110,7 @@ func (m Model) renderLogs(maxLines int) string {
 
 func (m Model) renderDiagnose() string {
 	s := m.styles
+	tr := m.tr()
 	diag := m.diag
 	if !m.hasDiag {
 		// Automatically classify currently inspected container if available.
@@ -118,7 +121,7 @@ func (m Model) renderDiagnose() string {
 				Logs:   m.logs,
 			})
 		} else {
-			return s.Muted.Render("Pulsa d o ejecuta /diagnose [container] para clasificar la causa raíz y generar el runbook.")
+			return s.Muted.Render(tr.DiagHint)
 		}
 	}
 
@@ -130,20 +133,20 @@ func (m Model) renderDiagnose() string {
 		diagHealth = HealthDegraded
 	}
 	fmt.Fprintf(&b, "%s  %s  %s\n\n",
-		s.Title.Render("Diagnóstico: "+diag.Container),
+		s.Title.Render(tr.DiagTitle+diag.Container),
 		s.StatusBadge(diagHealth, fmt.Sprintf(" %s · %s ", diag.Category, diag.FaultLabel)),
-		s.Muted.Render(fmt.Sprintf("confianza %.0f%%", diag.Confidence*100)),
+		s.Muted.Render(fmt.Sprintf(tr.DiagConfidence, diag.Confidence*100)),
 	)
 
-	b.WriteString(s.Selected.Render("Qué pasó:") + " " + s.Text.Render(diag.WhatHappened) + "\n")
-	b.WriteString(s.Selected.Render("Por qué pasó:") + " " + s.Text.Render(diag.WhyItHappened) + "\n\n")
+	b.WriteString(s.Selected.Render(tr.DiagWhat) + " " + s.Text.Render(diag.WhatHappened) + "\n")
+	b.WriteString(s.Selected.Render(tr.DiagWhy) + " " + s.Text.Render(diag.WhyItHappened) + "\n\n")
 
-	b.WriteString(s.Title.Render("Árbol de Decisión (Causa Raíz)") + "\n")
+	b.WriteString(s.Title.Render(tr.DiagTreeTitle) + "\n")
 	for _, node := range diag.RootCauseTree {
 		b.WriteString("  " + s.Warn.Render(node) + "\n")
 	}
 
-	b.WriteString("\n" + s.Title.Render("Guía de Resolución (Runbook)") + "\n")
+	b.WriteString("\n" + s.Title.Render(tr.DiagRunbook) + "\n")
 	for i, cmd := range diag.Runbook {
 		fmt.Fprintf(&b, "  %s %s\n", s.Selected.Render(fmt.Sprintf("%d.", i+1)), s.Text.Render(cmd))
 	}
@@ -152,6 +155,7 @@ func (m Model) renderDiagnose() string {
 
 func (m Model) renderOtelStatus() string {
 	s := m.styles
+	tr := m.tr()
 	var st telemetry.StoreStats
 	if m.receiver != nil {
 		st = m.receiver.Stats()
@@ -168,21 +172,21 @@ func (m Model) renderOtelStatus() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(s.Title.Render("Estado de Telemetría OTLP & DuckDB") + "\n\n")
+	b.WriteString(s.Title.Render(tr.OtelTitle) + "\n\n")
 	k := kv{b: &b, s: s}
-	stateStr := s.StatusBadge(HealthError, GlyphDown) + " " + s.Warn.Render("inactivo")
+	stateStr := s.StatusBadge(HealthError, GlyphDown) + " " + s.Warn.Render(tr.OtelInactive)
 	if st.Listening {
-		stateStr = s.StatusBadge(HealthOK, GlyphOK) + " " + s.OK.Render("escuchando")
+		stateStr = s.StatusBadge(HealthOK, GlyphOK) + " " + s.OK.Render(tr.OtelListening)
 	}
-	k.row("receptor", stateStr)
+	k.row(tr.OtelReceiver, stateStr)
 	k.row("OTLP gRPC", st.GRPCAddr)
 	k.row("OTLP HTTP", st.HTTPAddr+" (/v1/logs, /v1/metrics)")
-	k.row("ring buffer", fmt.Sprintf("%d / %d líneas (total ingerido: %d)", st.RingLen, st.RingCap, st.TotalIngested))
-	k.row("batch writer", fmt.Sprintf("%d lotes volcados (cada 2s o 500 regs)", st.BatchesFlushed))
-	k.row("filas DuckDB", fmt.Sprintf("%d registros", st.StoredRows))
-	k.row("tamaño DB", humanBytes(uint64(max(0, st.DiskBytes))))
-	k.row("límites DB", fmt.Sprintf("memory_limit=%s · threads=%d · TTL=%s", st.MemoryLimit, st.Threads, st.Retention))
-	b.WriteString("\n" + s.Muted.Render("pulsa cualquier tecla para cerrar"))
+	k.row("ring buffer", fmt.Sprintf(tr.OtelRing, st.RingLen, st.RingCap, st.TotalIngested))
+	k.row("batch writer", fmt.Sprintf(tr.OtelBatch, st.BatchesFlushed))
+	k.row("DuckDB rows", fmt.Sprintf(tr.OtelRows, st.StoredRows))
+	k.row(tr.OtelSize, humanBytes(uint64(max(0, st.DiskBytes))))
+	k.row(tr.OtelLimits, fmt.Sprintf("memory_limit=%s · threads=%d · TTL=%s", st.MemoryLimit, st.Threads, st.Retention))
+	b.WriteString("\n" + s.Muted.Render(tr.HelpFooterAny))
 	return s.Overlay.Render(b.String())
 }
 

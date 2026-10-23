@@ -26,6 +26,7 @@ func main() {
 	dbPath := flag.String("db", envOr("OKSHIELD_DB_PATH", "./data/okshield.duckdb"), "path to warm telemetry store")
 	grpcAddr := flag.String("otlp-grpc", envOr("OKSHIELD_OTLP_GRPC_ADDR", telemetry.DefaultOTLPGRPCAddr), "OTLP gRPC listen address")
 	httpAddr := flag.String("otlp-http", envOr("OKSHIELD_OTLP_HTTP_ADDR", telemetry.DefaultOTLPHTTPAddr), "OTLP HTTP listen address")
+	langFlag := flag.String("lang", envOr("OKSHIELD_LANG", "es"), "UI language (es|en)")
 	flag.Parse()
 
 	if *showVersion {
@@ -57,11 +58,13 @@ func main() {
 	rcv := telemetry.NewReceiver(store, *grpcAddr, *httpAddr)
 	_ = rcv.Start(ctx)
 
+	uiLang, _ := tui.ParseLang(*langFlag)
 	p := tea.NewProgram(tui.New(tui.Options{
 		Ctx:      ctx,
 		Docker:   cli,
 		Store:    store,
 		Receiver: rcv,
+		Lang:     uiLang,
 	}), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "okshield:", err)

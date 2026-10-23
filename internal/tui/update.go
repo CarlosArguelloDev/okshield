@@ -134,6 +134,8 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.dispatch(Command{Kind: CmdWhatsup, Name: "whatsup"})
 	case "d":
 		return m.dispatch(Command{Kind: CmdDiagnose, Name: "diagnose"})
+	case "i":
+		return m.dispatch(Command{Kind: CmdLang, Name: "lang"})
 	case "m", " ":
 		if m.tab == TabMetrics {
 			m.metricKind = (m.metricKind + 1) % metricKindCount
@@ -292,6 +294,20 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg {
 			return pruneMsg{removed: st.Prune(time.Now())}
 		}
+	case CmdLang:
+		if len(c.Args) > 0 {
+			if l, ok := ParseLang(c.Args[0]); ok {
+				m.lang = l
+			}
+		} else {
+			if m.lang == LangES {
+				m.lang = LangEN
+			} else {
+				m.lang = LangES
+			}
+		}
+		m.input.Placeholder = m.tr().HelpPlaceholder
+		m.status = "lang: " + m.lang.Code()
 	case CmdHelp:
 		m.showHelp = true
 	case CmdQuit:

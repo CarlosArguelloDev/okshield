@@ -235,7 +235,7 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	})
 	model = m.(Model)
 	metricsView := model.View()
-	for _, want := range []string{"CPU Usage", "Memory Usage", "Red (RX/TX)", "Disco I/O", "128.0MB"} {
+	for _, want := range []string{"CPU Usage", "Memory Usage", "Red RX/TX", "Disco I/O", "128.0MB"} {
 		if !strings.Contains(metricsView, want) {
 			t.Errorf("container metrics view missing %q", want)
 		}
@@ -263,5 +263,24 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	view = model.View()
 	if !strings.Contains(view, "/var/lib/docker/volumes/apidata/_data") {
 		t.Errorf("volume details view missing mountpoint")
+	}
+}
+
+func TestLanguageSwitching(t *testing.T) {
+	m := sized(t)
+	if m.lang != LangES || !strings.Contains(m.View(), "Resumen") {
+		t.Fatalf("expected default Spanish UI, got lang=%v", m.lang)
+	}
+	// Toggle to English with 'i' shortcut.
+	m = key(m, "i")
+	if m.lang != LangEN || !strings.Contains(m.View(), "Summary") || !strings.Contains(m.View(), "Metrics") {
+		t.Errorf("expected English UI after pressing 'i', got lang=%v", m.lang)
+	}
+	// Switch back to Spanish via '/lang es'.
+	m = key(m, "/")
+	m = key(m, "lang es")
+	m = key(m, "enter")
+	if m.lang != LangES || !strings.Contains(m.View(), "Resumen") {
+		t.Errorf("expected Spanish UI after '/lang es', got lang=%v", m.lang)
 	}
 }
