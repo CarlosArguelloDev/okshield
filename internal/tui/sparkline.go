@@ -37,6 +37,90 @@ var (
 	brailleDotRight = [4]rune{0x08, 0x10, 0x20, 0x80}
 )
 
+// SmoothSeries applies an Exponential Moving Average (EMA, alpha=0.45) followed
+// by a 5-point weighted moving average kernel [1, 2, 4, 2, 1]/10 to transform
+// abrupt step changes into smooth, organic wave transitions.
+func SmoothSeries(values []float64) []float64 {
+	n := len(values)
+	if n == 0 {
+		return nil
+	}
+	out := make([]float64, n)
+	if n == 1 {
+		out[0] = values[0]
+		return out
+	}
+
+	// Pass 1: forward EMA to soften sudden spikes.
+	const alpha = 0.45
+	ema := make([]float64, n)
+	ema[0] = values[0]
+	for i := 1; i < n; i++ {
+		ema[i] = alpha*values[i] + (1.0-alpha)*ema[i-1]
+	}
+
+	// Pass 2: 5-point triangular moving average [1, 2, 4, 2, 1] / 10.
+	weights := [5]float64{1, 2, 4, 2, 1}
+	for i := 0; i < n; i++ {
+		var sum, wSum float64
+		for k := -2; k <= 2; k++ {
+			idx := clampInt(i+k, 0, n-1)
+			w := weights[k+2]
+			sum += ema[idx] * w
+			wSum += w
+		}
+		out[i] = sum / wSum
+	}
+	return out
+}
+
+// interpolateWave resamples a smoothed series across `targetPoints` horizontal
+// dot columns using cosine interpolation between sample points so transitions
+// between ticks render as fluid waves instead of staircases.
+func interpolateWave(values []float64, targetPoints int) []float64 {
+	if targetPoints <= 0 {
+		return nil
+	}
+	smoothed := SmoothSeries(values)
+	n := len(smoothed)
+	out := make([]float64, targetPoints)
+	if n == 0 {
+		return out
+	}
+	if n == 1 {
+		for i := range out {
+			out[i] = smoothed[0]
+		}
+		return out
+	}
+
+	// Each raw sample spans `step` horizontal dots (2 dots per tick), keeping
+	// the timeline right-aligned at "ahora" while smoothly interpolating
+	// intermediate points.
+	const dotsPerSample = 2.0
+	totalSpan := float64(n-1) * dotsPerSample
+	startOffset := float64(targetPoints-1) - totalSpan
+
+	for x := 0; x < targetPoints; x++ {
+		rel := float64(x) - startOffset
+		if rel <= 0 {
+			out[x] = smoothed[0]
+			continue
+		}
+		pos := rel / dotsPerSample
+		i0 := int(math.Floor(pos))
+		if i0 >= n-1 {
+			out[x] = smoothed[n-1]
+			continue
+		}
+		frac := pos - float64(i0)
+		// Cosine interpolation for organic S-curve slope between samples.
+		mu := (1.0 - math.Cos(frac*math.Pi)) * 0.5
+		out[x] = smoothed[i0]*(1.0-mu) + smoothed[i0+1]*mu
+	}
+	return out
+}
+
 // BrailleSparkline renders a slice of float64 samples into a single-line
 // Unicode Braille graph (U+2800..U+28FF) of `width` characters (packing 2*width
 // time samples horizontally and 4 vertical levels per character).
@@ -81,9 +165,9 @@ func BrailleSparkline(values []float64, width int, maxVal float64) string {
 
 // BrailleChart renders a large multi-row gotop-style Unicode Braille line chart
 // of `width` character columns (2*width horizontal dot samples) by `height`
-// character rows (4*height vertical dot levels). Only the dot at the metric's
-// height (plus vertical steps between adjacent points) is lit, rather than
-// filling all dots down to zero.
+// character rows (4*height vertical dot levels). Before plotting, it applies
+// SmoothSeries + cosine wave interpolation so transitions appear as smooth
+// curves rather than square steps.
 func BrailleChart(values []float64, width, height int, maxVal float64) []string {
 	if width <= 0 || height <= 0 {
 		return nil
@@ -119,16 +203,7 @@ func BrailleChart(values []float64, width, height int, maxVal float64) []string 
 		return out
 	}
 
-	sampleAt := func(x int) float64 {
-		idx := len(values) - totalDotsX + x
-		if idx < 0 {
-			return values[0]
-		}
-		if idx >= len(values) {
-			return values[len(values)-1]
-		}
-		return values[idx]
-	}
+	wave := interpolateWave(values, totalDotsX)
 
 	yTopFor := func(v float64) int {
 		if v <= 0 || maxVal <= 0 {
@@ -156,12 +231,10 @@ func BrailleChart(values []float64, width, height int, maxVal float64) []string 
 		}
 	}
 
-	prevY := yTopFor(sampleAt(0))
+	prevY := yTopFor(wave[0])
 	for x := 0; x < totalDotsX; x++ {
-		curY := yTopFor(sampleAt(x))
+		curY := yTopFor(wave[x])
 		setDot(x, curY)
-		// Connect steep vertical transitions between adjacent columns so peaks
-		// form a continuous dotted line like gotop/btop.
 		if curY < prevY-1 {
 			for y := curY + 1; y < prevY; y++ {
 				setDot(x, y)
