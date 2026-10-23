@@ -56,6 +56,28 @@ func (m Model) generalDetails(k kv) {
 	k.row("redes", strconv.Itoa(len(m.networks)))
 	k.row("volúmenes", strconv.Itoa(len(m.volumes)))
 
+	var cpuBuf, memBuf [HistoryCapacity]float64
+	for _, c := range m.containers {
+		if ser, ok := m.history[c.ID]; ok {
+			cs := ser.CPUSamples(make([]float64, 0, HistoryCapacity))
+			ms := ser.MemSamples(make([]float64, 0, HistoryCapacity))
+			k.section("Métricas en Tiempo Real · " + c.Name)
+			k.row("CPU Usage", fmt.Sprintf("%s %5.1f%%  %s",
+				m.cpuBar.ViewAs(clamp01(lastVal(cs)/100.0)),
+				lastVal(cs),
+				s.Title.Render(BrailleSparkline(cs, 20, 100.0)),
+			))
+			k.row("Mem Usage", fmt.Sprintf("%s %5.1f%%  %s",
+				m.memBar.ViewAs(clamp01(lastVal(ms)/100.0)),
+				lastVal(ms),
+				s.Key.Render(BrailleSparkline(ms, 20, 100.0)),
+			))
+			_ = cpuBuf
+			_ = memBuf
+			break
+		}
+	}
+
 	if len(m.containers) > 0 {
 		k.section("Contenedores")
 		for _, c := range m.containers {
@@ -75,8 +97,58 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 	k.row("imagen", c.Image)
 	k.row("estado", c.Status)
 
+	var cpuHist, memHist []float64
+	var rxRate, txRate float64
+	if ser, ok := m.history[c.ID]; ok {
+		cpuHist = ser.CPUSamples(make([]float64, 0, HistoryCapacity))
+		memHist = ser.MemSamples(make([]float64, 0, HistoryCapacity))
+		rxRate, txRate = ser.NetRates()
+	}
+	if len(cpuHist) == 0 && m.detail.ID == c.ID && m.detail.Running {
+		cpuHist = []float64{m.stats.CPUPercent}
+		memHist = []float64{m.stats.MemPercent}
+	}
+
+	memLim := m.stats.MemLimit
+	if memLim == 0 && m.detail.ID == c.ID && m.detail.MemoryLimit > 0 {
+		memLim = uint64(m.detail.MemoryLimit)
+	}
+
+	k.section("Métricas en Tiempo Real (Braille 60s)")
+	cpuSpark := s.Title.Render(BrailleSparkline(cpuHist, 24, 100.0))
+	memSpark := s.Key.Render(BrailleSparkline(memHist, 24, 100.0))
+	k.row("CPU Usage", fmt.Sprintf("%s %5.1f%%  %s  %s",
+		m.cpuBar.ViewAs(clamp01(m.stats.CPUPercent/100.0)),
+		m.stats.CPUPercent,
+		cpuSpark,
+		s.Muted.Render(fmt.Sprintf("throt:%d", m.stats.Throttled)),
+	))
+	k.row("Memory Usage", fmt.Sprintf("%s %s / %s (%4.1f%%)  %s",
+		m.memBar.ViewAs(clamp01(m.stats.MemPercent/100.0)),
+		humanBytes(m.stats.MemUsage),
+		humanBytes(memLim),
+		m.stats.MemPercent,
+		memSpark,
+	))
+	k.row("Red (RX/TX)", fmt.Sprintf("↓ %s (%s/s)  ·  ↑ %s (%s/s)",
+		humanBytes(m.stats.NetRxBytes),
+		humanBytes(uint64(rxRate)),
+		humanBytes(m.stats.NetTxBytes),
+		humanBytes(uint64(txRate)),
+	))
+	k.row("Bloque I/O", fmt.Sprintf("lectura %s  ·  escritura %s  ·  PIDs %d",
+		humanBytes(m.stats.BlkReadBytes),
+		humanBytes(m.stats.BlkWriteBytes),
+		m.stats.PIDs,
+	))
+	if m.receiver != nil {
+		ost := m.receiver.Stats()
+		k.row("OTel Ingest", fmt.Sprintf("%d logs en ring buffer (total: %d)", ost.RingLen, ost.TotalIngested))
+	}
+
 	d := m.detail
 	if d.ID == c.ID {
+		k.section("Inspección de Contenedor")
 		if d.OOMKilled {
 			k.row("OOMKilled", s.StatusBadge(HealthError, GlyphError)+" sí")
 		}
@@ -97,12 +169,6 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 		k.row("límite CPU", limitStr(d.NanoCPUs, fmt.Sprintf("%.2f cpu", float64(d.NanoCPUs)/1e9)))
 		k.row("cmd", strings.Join(d.Cmd, " "))
 		k.row("env vars", strconv.Itoa(d.EnvCount))
-		if d.Running {
-			k.row("uso vivo", fmt.Sprintf("CPU %.1f%% (throt:%d) · RAM %s/%s (%.1f%%) · PIDs %d",
-				m.stats.CPUPercent, m.stats.Throttled,
-				humanBytes(m.stats.MemUsage), humanBytes(m.stats.MemLimit), m.stats.MemPercent,
-				m.stats.PIDs))
-		}
 	} else if m.detailErr != nil {
 		k.row("inspect", s.Err.Render(m.detailErr.Error()))
 	}
@@ -195,4 +261,21 @@ func limitStr(v int64, formatted string) string {
 		return "sin límite"
 	}
 	return formatted
+}
+
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func lastVal(xs []float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	return xs[len(xs)-1]
 }

@@ -30,6 +30,7 @@ type TelemetryAPI interface {
 
 const (
 	refreshInterval = 3 * time.Second
+	metricsInterval = 1500 * time.Millisecond
 	requestTimeout  = 3 * time.Second
 )
 
@@ -70,6 +71,17 @@ type pruneMsg struct {
 
 // refreshTickMsg triggers the next periodic snapshot.
 type refreshTickMsg struct{}
+
+// metricsTickMsg triggers the asynchronous 1.5s live metrics sample.
+type metricsTickMsg struct{}
+
+// metricsSampleMsg carries a live stats sample for a container.
+type metricsSampleMsg struct {
+	id    string
+	stats docker.Stats
+	at    time.Time
+	err   error
+}
 
 // fetchResources lists containers, networks and volumes off the UI goroutine.
 func fetchResources(parent context.Context, api DockerAPI) tea.Cmd {
@@ -200,6 +212,24 @@ func runDiagnose(parent context.Context, api DockerAPI, target string) tea.Cmd {
 
 func scheduleRefresh() tea.Cmd {
 	return tea.Tick(refreshInterval, func(time.Time) tea.Msg { return refreshTickMsg{} })
+}
+
+func scheduleMetrics() tea.Cmd {
+	return tea.Tick(metricsInterval, func(time.Time) tea.Msg { return metricsTickMsg{} })
+}
+
+// fetchMetrics collects a non-blocking live stats sample for a container.
+func fetchMetrics(parent context.Context, api DockerAPI, id string) tea.Cmd {
+	tel, ok := api.(TelemetryAPI)
+	if !ok || id == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(parent, requestTimeout)
+		defer cancel()
+		st, err := tel.ContainerStats(ctx, id)
+		return metricsSampleMsg{id: id, stats: st, at: time.Now(), err: err}
+	}
 }
 
 // containerHealth maps Docker state to the status glyph classification.

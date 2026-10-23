@@ -29,10 +29,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshTickMsg:
 		return m, tea.Batch(fetchResources(m.ctx, m.api), m.detailCmd())
 
+	case metricsTickMsg:
+		return m, tea.Batch(scheduleMetrics(), m.metricsCmd())
+
+	case metricsSampleMsg:
+		if msg.err == nil {
+			m.recordMetrics(msg.id, msg.stats, msg.at)
+			if c, ok := m.selectedContainer(); ok && c.ID == msg.id {
+				m.stats = msg.stats
+			}
+		}
+		return m, nil
+
 	case resourcesMsg:
 		return m.applyResources(msg)
 
 	case detailMsg:
+		if msg.err == nil && msg.detail.Running {
+			m.recordMetrics(msg.id, msg.stats, time.Now())
+		}
 		if c, ok := m.selectedContainer(); ok && c.ID == msg.id {
 			m.detail, m.stats, m.logs, m.clusters, m.detailErr = msg.detail, msg.stats, msg.logs, msg.clusters, msg.err
 		}

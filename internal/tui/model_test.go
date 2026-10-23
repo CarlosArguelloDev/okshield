@@ -220,10 +220,33 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	model = key(model, "?") // back to TabSummary
 
 	model = key(model, "right") // switch to TabDetails using right arrow
+	m, _ = model.Update(metricsSampleMsg{
+		id: "11111111111122222222",
+		stats: docker.Stats{
+			CPUPercent: 42.5,
+			MemUsage:   32 << 20,
+			MemLimit:   128 << 20,
+			MemPercent: 25.0,
+			NetRxBytes: 4096,
+			NetTxBytes: 2048,
+		},
+	})
+	model = m.(Model)
 	view := model.View()
-	for _, want := range []string{"api", "worker", "8080", "172.17.0.2", "apidata", "128.0MB"} {
+	for _, want := range []string{"api", "worker", "CPU Usage", "Memory Usage", "Red (RX/TX)", "128.0MB"} {
 		if !strings.Contains(view, want) {
-			t.Errorf("container details view missing %q", want)
+			t.Errorf("container metrics view missing %q", want)
+		}
+	}
+	// Focus main inspector pane and scroll down to inspect ports/networks/mounts.
+	model = key(model, "tab")
+	for range 8 {
+		model = key(model, "j")
+	}
+	scrolledView := model.View()
+	for _, want := range []string{"8080", "172.17.0.2", "apidata"} {
+		if !strings.Contains(scrolledView, want) {
+			t.Errorf("scrolled container details view missing %q", want)
 		}
 	}
 

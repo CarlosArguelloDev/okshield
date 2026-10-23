@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -115,6 +116,9 @@ type Model struct {
 	logs       []string
 	clusters   []summarizer.LogCluster
 	detailErr  error
+	history    map[string]*MetricSeries
+	cpuBar     progress.Model
+	memBar     progress.Model
 
 	pulse    summarizer.Report
 	hasPulse bool
@@ -155,6 +159,17 @@ func New(opts Options) Model {
 		}
 	}
 
+	cpuBar := progress.New(
+		progress.WithSolidFill(string(ColorFocus)),
+		progress.WithoutPercentage(),
+		progress.WithWidth(14),
+	)
+	memBar := progress.New(
+		progress.WithSolidFill(string(ColorAccent)),
+		progress.WithoutPercentage(),
+		progress.WithWidth(14),
+	)
+
 	return Model{
 		styles:   s,
 		ctx:      opts.Ctx,
@@ -163,6 +178,9 @@ func New(opts Options) Model {
 		receiver: opts.Receiver,
 		hostname: host,
 		otel:     otelState,
+		history:  make(map[string]*MetricSeries),
+		cpuBar:   cpuBar,
+		memBar:   memBar,
 		input:    ti,
 		status:   "conectando con docker…",
 	}
@@ -170,7 +188,7 @@ func New(opts Options) Model {
 
 // Init starts background ticks and the first infrastructure snapshot.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(sampleMem(), textinput.Blink, fetchResources(m.ctx, m.api))
+	return tea.Batch(sampleMem(), scheduleMetrics(), textinput.Blink, fetchResources(m.ctx, m.api))
 }
 
 // sampleMem schedules the next self-memory sample. runtime.ReadMemStats is
@@ -225,4 +243,40 @@ func (m Model) detailCmd() tea.Cmd {
 		return nil
 	}
 	return fetchDetail(m.ctx, m.api, m.store, c.ID)
+}
+
+// metricsCmd polls live stats for the selected container (or the first running
+// container when General is selected).
+func (m Model) metricsCmd() tea.Cmd {
+	if c, ok := m.selectedContainer(); ok {
+		if c.State == "running" {
+			return fetchMetrics(m.ctx, m.api, c.ID)
+		}
+		return nil
+	}
+	for _, c := range m.containers {
+		if c.State == "running" {
+			return fetchMetrics(m.ctx, m.api, c.ID)
+		}
+	}
+	return nil
+}
+
+// recordMetrics stores a live CPU/RAM/Net sample in the bounded ring buffer.
+func (m *Model) recordMetrics(id string, st docker.Stats, at time.Time) {
+	if id == "" {
+		return
+	}
+	if m.history == nil {
+		m.history = make(map[string]*MetricSeries)
+	}
+	if len(m.history) > 64 {
+		clear(m.history)
+	}
+	series, ok := m.history[id]
+	if !ok {
+		series = &MetricSeries{}
+		m.history[id] = series
+	}
+	series.Push(st.CPUPercent, st.MemPercent, st.NetRxBytes, st.NetTxBytes, at)
 }
