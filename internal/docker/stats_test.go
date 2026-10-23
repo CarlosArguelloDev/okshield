@@ -27,6 +27,12 @@ const sampleStatsJSON = `{
     "eth0": {"rx_bytes": 1024, "tx_bytes": 2048},
     "eth1": {"rx_bytes": 512, "tx_bytes": 256}
   },
+  "blkio_stats": {
+    "io_service_bytes_recursive": [
+      {"op": "Read", "value": 4096},
+      {"op": "Write", "value": 8192}
+    ]
+  },
   "pids_stats": {"current": 12}
 }`
 
@@ -54,6 +60,9 @@ func TestContainerStats(t *testing.T) {
 	}
 	if st.NetRxBytes != 1536 || st.NetTxBytes != 2304 {
 		t.Errorf("Net rx=%d tx=%d", st.NetRxBytes, st.NetTxBytes)
+	}
+	if st.BlkReadBytes != 4096 || st.BlkWriteBytes != 8192 {
+		t.Errorf("Blk read=%d write=%d", st.BlkReadBytes, st.BlkWriteBytes)
 	}
 	if st.PIDs != 12 || st.Throttled != 7 {
 		t.Errorf("PIDs=%d Throttled=%d", st.PIDs, st.Throttled)

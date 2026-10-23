@@ -7,14 +7,16 @@ import (
 
 // Stats holds a single resource-usage snapshot of a running container.
 type Stats struct {
-	CPUPercent float64
-	MemUsage   uint64
-	MemLimit   uint64
-	MemPercent float64
-	NetRxBytes uint64
-	NetTxBytes uint64
-	PIDs       uint64
-	Throttled  uint64 // number of CPU throttled periods
+	CPUPercent    float64
+	MemUsage      uint64
+	MemLimit      uint64
+	MemPercent    float64
+	NetRxBytes    uint64
+	NetTxBytes    uint64
+	BlkReadBytes  uint64
+	BlkWriteBytes uint64
+	PIDs          uint64
+	Throttled     uint64 // number of CPU throttled periods
 }
 
 type apiStats struct {
@@ -44,6 +46,12 @@ type apiStats struct {
 		RxBytes uint64 `json:"rx_bytes"`
 		TxBytes uint64 `json:"tx_bytes"`
 	} `json:"networks"`
+	BlkioStats struct {
+		IoServiceBytesRecursive []struct {
+			Op    string `json:"op"`
+			Value uint64 `json:"value"`
+		} `json:"io_service_bytes_recursive"`
+	} `json:"blkio_stats"`
 	PidsStats struct {
 		Current uint64 `json:"current"`
 	} `json:"pids_stats"`
@@ -94,6 +102,14 @@ func computeStats(r apiStats) Stats {
 	for _, n := range r.Networks {
 		s.NetRxBytes += n.RxBytes
 		s.NetTxBytes += n.TxBytes
+	}
+	for _, b := range r.BlkioStats.IoServiceBytesRecursive {
+		switch b.Op {
+		case "read", "Read", "READ":
+			s.BlkReadBytes += b.Value
+		case "write", "Write", "WRITE":
+			s.BlkWriteBytes += b.Value
+		}
 	}
 	return s
 }
