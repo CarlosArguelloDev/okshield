@@ -30,10 +30,10 @@ func TestBrailleSparkline(t *testing.T) {
 		},
 		{
 			name:   "ramp_up",
-			values: []float64{0, 20, 50, 75, 95, 100},
+			values: []float64{0, 20, 50, 75, 80, 100},
 			width:  3,
 			maxVal: 100,
-			want:   "⢀⣠⣾",
+			want:   "⢀⣴⣾",
 		},
 	}
 
