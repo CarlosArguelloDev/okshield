@@ -43,18 +43,17 @@ type Catalog struct {
 	NoResource       string
 
 	Views   [3]string
-	Tabs    [5]string
+	Tabs    [4]string
 	Metrics [4]string
 
-	CtrlScroll   string
-	CtrlViews    string
-	CtrlTabs     string
-	CtrlFocus    string
-	CtrlWhatsup  string
-	CtrlDiagnose string
-	CtrlLang     string
-	CtrlCommand  string
-	CtrlQuit     string
+	CtrlScroll  string
+	CtrlViews   string
+	CtrlTabs    string
+	CtrlFocus   string
+	CtrlWhatsup string
+	CtrlLang    string
+	CtrlCommand string
+	CtrlQuit    string
 
 	NoAnomalies     string
 	HelpPlaceholder string
@@ -105,17 +104,6 @@ type Catalog struct {
 	LogsRingCount  string
 	LogsEmpty      string
 	LogsRecent     string
-
-	DiagHint       string
-	DiagTitle      string
-	DiagConfidence string
-	DiagDeciderHdr string
-	DiagCalibConf  string
-	DiagLatency    string
-	DiagWhat       string
-	DiagWhy        string
-	DiagTreeTitle  string
-	DiagRunbook    string
 }
 
 var catalogES = Catalog{
@@ -129,18 +117,17 @@ var catalogES = Catalog{
 	NoResource:       "Sin recurso seleccionado",
 
 	Views:   [3]string{"Contenedores", "Redes", "Volúmenes"},
-	Tabs:    [5]string{"Resumen", "Métricas", "Detalles", "Logs", "Diagnóstico"},
+	Tabs:    [4]string{"Resumen", "Métricas", "Detalles", "Logs"},
 	Metrics: [4]string{"CPU %", "Memoria %", "Red RX/TX", "Disco I/O"},
 
-	CtrlScroll:   "Scroll",
-	CtrlViews:    "Vistas",
-	CtrlTabs:     "Pestañas",
-	CtrlFocus:    "Foco",
-	CtrlWhatsup:  "Whatsup",
-	CtrlDiagnose: "Diagnóstico",
-	CtrlLang:     "Idioma",
-	CtrlCommand:  "Comando",
-	CtrlQuit:     "Salir",
+	CtrlScroll:  "Scroll",
+	CtrlViews:   "Vistas",
+	CtrlTabs:    "Pestañas",
+	CtrlFocus:   "Foco",
+	CtrlWhatsup: "Whatsup",
+	CtrlLang:    "Idioma",
+	CtrlCommand: "Comando",
+	CtrlQuit:    "Salir",
 
 	NoAnomalies:     "Sin anomalías activas (? para /whatsup)",
 	HelpPlaceholder: "escribe /help para ver comandos",
@@ -191,17 +178,6 @@ var catalogES = Catalog{
 	LogsRingCount:  "(%d líneas en ring buffer → %d patrones únicos)",
 	LogsEmpty:      "Sin logs recientes para este contenedor.",
 	LogsRecent:     "Últimas líneas (Ring Buffer)",
-
-	DiagHint:       "Pulsa d o ejecuta /diagnose [container] para clasificar la causa raíz y generar el runbook.",
-	DiagTitle:      "Diagnóstico: ",
-	DiagConfidence: "confianza %.0f%%",
-	DiagDeciderHdr: "Strands Decider 2B (#policy)",
-	DiagCalibConf:  "Confianza Calibrada: %.1f%%",
-	DiagLatency:    "Latencia: %dms",
-	DiagWhat:       "Qué pasó:",
-	DiagWhy:        "Por qué pasó:",
-	DiagTreeTitle:  "Causa Raíz (Árbol de Decisión)",
-	DiagRunbook:    "Guía de Resolución (Runbook)",
 }
 
 var catalogEN = Catalog{
@@ -215,18 +191,17 @@ var catalogEN = Catalog{
 	NoResource:       "No resource selected",
 
 	Views:   [3]string{"Containers", "Networks", "Volumes"},
-	Tabs:    [5]string{"Summary", "Metrics", "Details", "Logs", "Diagnose"},
+	Tabs:    [4]string{"Summary", "Metrics", "Details", "Logs"},
 	Metrics: [4]string{"CPU %", "Memory %", "Net RX/TX", "Disk I/O"},
 
-	CtrlScroll:   "Scroll",
-	CtrlViews:    "Views",
-	CtrlTabs:     "Tabs",
-	CtrlFocus:    "Focus",
-	CtrlWhatsup:  "Whatsup",
-	CtrlDiagnose: "Diagnose",
-	CtrlLang:     "Lang",
-	CtrlCommand:  "Command",
-	CtrlQuit:     "Quit",
+	CtrlScroll:  "Scroll",
+	CtrlViews:   "Views",
+	CtrlTabs:    "Tabs",
+	CtrlFocus:   "Focus",
+	CtrlWhatsup: "Whatsup",
+	CtrlLang:    "Lang",
+	CtrlCommand: "Command",
+	CtrlQuit:    "Quit",
 
 	NoAnomalies:     "No active anomalies (? for /whatsup)",
 	HelpPlaceholder: "type /help to see commands",
@@ -277,17 +252,6 @@ var catalogEN = Catalog{
 	LogsRingCount:  "(%d lines in ring buffer → %d unique patterns)",
 	LogsEmpty:      "No recent logs for this container.",
 	LogsRecent:     "Recent Lines (Ring Buffer)",
-
-	DiagHint:       "Press d or run /diagnose [container] to classify root cause and generate the runbook.",
-	DiagTitle:      "Diagnosis: ",
-	DiagConfidence: "confidence %.0f%%",
-	DiagDeciderHdr: "Strands Decider 2B (#policy)",
-	DiagCalibConf:  "Calibrated Confidence: %.1f%%",
-	DiagLatency:    "Latency: %dms",
-	DiagWhat:       "What happened:",
-	DiagWhy:        "Why it happened:",
-	DiagTreeTitle:  "Root Cause (Decision Tree)",
-	DiagRunbook:    "Resolution Guide (Runbook)",
 }
 
 func (m Model) tr() Catalog {

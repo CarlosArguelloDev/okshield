@@ -6,7 +6,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 )
@@ -55,12 +54,6 @@ type detailMsg struct {
 type pulseMsg struct {
 	report summarizer.Report
 	err    error
-}
-
-// diagnoseMsg carries the decision-model diagnosis for a container.
-type diagnoseMsg struct {
-	diag diagnose.Diagnosis
-	err  error
 }
 
 // refreshTickMsg triggers the next periodic snapshot.
@@ -162,35 +155,6 @@ func runPulse(parent context.Context, api DockerAPI, containers []docker.Contain
 			})
 		}
 		return pulseMsg{report: summarizer.Analyze(inputs, 5)}
-	}
-}
-
-// runDiagnose executes the decision-model classifier for a target container.
-func runDiagnose(parent context.Context, api DockerAPI, target string) tea.Cmd {
-	if api == nil || target == "" {
-		return nil
-	}
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(parent, requestTimeout)
-		defer cancel()
-		d, err := api.InspectContainer(ctx, target)
-		if err != nil {
-			return diagnoseMsg{err: err}
-		}
-		var st docker.Stats
-		var logs []string
-		if tel, ok := api.(TelemetryAPI); ok {
-			if d.Running {
-				st, _ = tel.ContainerStats(ctx, target)
-			}
-			logs, _ = tel.ContainerLogs(ctx, target, docker.MaxLogLines)
-		}
-		diag := diagnose.ClassifyWithContext(ctx, summarizer.ContainerInput{
-			Detail: d,
-			Stats:  st,
-			Logs:   logs,
-		})
-		return diagnoseMsg{diag: diag}
 	}
 }
 

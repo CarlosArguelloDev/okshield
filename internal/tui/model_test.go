@@ -47,8 +47,6 @@ func TestKeybindingsSwitchViewsAndTabs(t *testing.T) {
 		{[]string{"2"}, ViewNetworks, TabSummary, FocusSidebar},
 		{[]string{"3"}, ViewVolumes, TabSummary, FocusSidebar},
 		{[]string{"3", "1"}, ViewContainers, TabSummary, FocusSidebar},
-		{[]string{"d"}, ViewContainers, TabDiagnose, FocusSidebar},
-		{[]string{"d", "?"}, ViewContainers, TabSummary, FocusSidebar},
 		{[]string{"right"}, ViewContainers, TabMetrics, FocusSidebar},
 		{[]string{"right", "right"}, ViewContainers, TabDetails, FocusSidebar},
 		{[]string{"right", "right", "right"}, ViewContainers, TabLogs, FocusSidebar},
@@ -211,18 +209,6 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	det := fetchDetail(context.Background(), fd, "11111111111122222222")()
 	m, _ = model.Update(det)
 	model = m.(Model)
-
-	dmsg := runDiagnose(context.Background(), fd, "11111111111122222222")()
-	m, _ = model.Update(dmsg)
-	model = m.(Model)
-	model = key(model, "d")
-	diagView := model.View()
-	for _, want := range []string{"Diagnóstico:", "Strands Decider 2B", "Bedrock Bypass:"} {
-		if !strings.Contains(diagView, want) {
-			t.Errorf("diagnose view missing %q", want)
-		}
-	}
-	model = key(model, "?") // back to TabSummary
 
 	model = key(model, "right") // switch to TabMetrics using right arrow
 	m, _ = model.Update(metricsSampleMsg{

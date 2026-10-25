@@ -57,17 +57,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			msg.report.Running, msg.report.Degraded, msg.report.Failed)
 		return m, nil
 
-	case diagnoseMsg:
-		if msg.err != nil {
-			m.status = "/diagnose error: " + msg.err.Error()
-			return m, nil
-		}
-		m.diag = msg.diag
-		m.hasDiag = true
-		m.status = fmt.Sprintf("/diagnose %s → %s [%s]",
-			msg.diag.Container, msg.diag.Category, msg.diag.FaultLabel)
-		return m, nil
-
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
@@ -120,8 +109,6 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.input.Focus()
 	case "?":
 		return m.dispatch(Command{Kind: CmdWhatsup, Name: "whatsup"})
-	case "d":
-		return m.dispatch(Command{Kind: CmdDiagnose, Name: "diagnose"})
 	case "i":
 		return m.dispatch(Command{Kind: CmdLang, Name: "lang"})
 	case "m", " ":
@@ -243,28 +230,6 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 		m.tab = TabSummary
 		m.status = "ejecutando resumen determinista (/whatsup)…"
 		return m, runPulse(m.ctx, m.api, m.containers)
-	case CmdDiagnose:
-		m.tab = TabDiagnose
-		target := ""
-		if len(c.Args) > 0 {
-			target = c.Args[0]
-		} else if sel, ok := m.selectedContainer(); ok {
-			target = sel.ID
-		} else if len(m.containers) > 0 {
-			target = m.containers[0].ID
-			for _, ct := range m.containers {
-				if containerHealth(ct) != HealthOK {
-					target = ct.ID
-					break
-				}
-			}
-		}
-		if target == "" {
-			m.status = "/diagnose: selecciona un contenedor o pasa su nombre"
-			return m, nil
-		}
-		m.status = fmt.Sprintf("diagnosticando %s…", target)
-		return m, runDiagnose(m.ctx, m.api, target)
 	case CmdContainers, CmdNetworks, CmdVolumes:
 		m.view = View(c.Kind - CmdContainers)
 		m.cursor = 0

@@ -16,8 +16,6 @@ func TestParseCommand(t *testing.T) {
 		{"/pulse", CmdWhatsup, "whatsup", nil},
 		{"  /PULSE  ", CmdWhatsup, "whatsup", nil},
 		{"whatsup", CmdWhatsup, "whatsup", nil},
-		{"/diagnose api", CmdDiagnose, "diagnose", []string{"api"}},
-		{"/diagnose", CmdDiagnose, "diagnose", nil},
 		{"/containers", CmdContainers, "containers", nil},
 		{"/networks", CmdNetworks, "networks", nil},
 		{"/volumes", CmdVolumes, "volumes", nil},
@@ -51,7 +49,7 @@ func TestSuggest(t *testing.T) {
 		prefix string
 		want   []string
 	}{
-		{"/d", []string{"/diagnose [container]"}},
+		{"/co", []string{"/containers"}},
 		{"/ne", []string{"/networks"}},
 		{"/zz", []string{}},
 	}

@@ -113,7 +113,6 @@ func (m Model) renderSidebar(w, h int) string {
 		{"←/→", tr.CtrlTabs},
 		{"tab", tr.CtrlFocus},
 		{"?", tr.CtrlWhatsup},
-		{"d", tr.CtrlDiagnose},
 		{"i", tr.CtrlLang + " (" + m.lang.Code() + ")"},
 		{"/", tr.CtrlCommand},
 		{"q", tr.CtrlQuit},
@@ -216,8 +215,6 @@ func (m Model) inspectorBody(bodyRows int) string {
 		return m.renderDetails()
 	case TabLogs:
 		return m.renderLogs(bodyRows)
-	case TabDiagnose:
-		return m.renderDiagnose()
 	}
 	return ""
 }

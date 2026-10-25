@@ -8,7 +8,6 @@ type CommandKind int
 const (
 	CmdUnknown CommandKind = iota
 	CmdWhatsup
-	CmdDiagnose
 	CmdContainers
 	CmdNetworks
 	CmdVolumes
@@ -38,7 +37,6 @@ type commandSpec struct {
 // commandTable is the single source of truth for available commands.
 var commandTable = []commandSpec{
 	{CmdWhatsup, []string{"whatsup", "pulse"}, "/whatsup", "Resumen determinista de lo que ocurre", "Deterministic summary of container health", "?"},
-	{CmdDiagnose, []string{"diagnose", "diag"}, "/diagnose [container]", "Clasifica la causa raíz y muestra el runbook", "Classify root cause and show runbook", "d"},
 	{CmdContainers, []string{"containers", "c"}, "/containers", "Vista de contenedores", "Containers view", "1"},
 	{CmdNetworks, []string{"networks", "n"}, "/networks", "Vista de redes", "Networks view", "2"},
 	{CmdVolumes, []string{"volumes", "v"}, "/volumes", "Vista de volúmenes", "Volumes view", "3"},

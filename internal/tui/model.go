@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 )
@@ -36,11 +35,10 @@ const (
 	TabMetrics
 	TabDetails
 	TabLogs
-	TabDiagnose
 	tabCount
 )
 
-var tabNames = [...]string{"Resumen", "Métricas", "Detalles", "Logs", "Diagnóstico"}
+var tabNames = [...]string{"Resumen", "Métricas", "Detalles", "Logs"}
 
 func (t Tab) String() string { return tabNames[t] }
 
@@ -119,8 +117,6 @@ type Model struct {
 
 	pulse    summarizer.Report
 	hasPulse bool
-	diag     diagnose.Diagnosis
-	hasDiag  bool
 
 	input    textinput.Model
 	status   string

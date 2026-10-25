@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 )
 
@@ -103,72 +102,6 @@ func (m Model) renderLogs(maxLines int) string {
 	b.WriteString("\n" + s.Title.Render(tr.LogsRecent) + "\n")
 	for _, line := range m.logs {
 		b.WriteString("  " + s.Muted.Render(truncate(line, max(20, m.width-40))) + "\n")
-	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-func (m Model) renderDiagnose() string {
-	s := m.styles
-	tr := m.tr()
-	diag := m.diag
-	if !m.hasDiag {
-		// Automatically classify currently inspected container if available.
-		if c, ok := m.selectedContainer(); ok && m.detail.ID == c.ID {
-			diag = diagnose.Classify(summarizer.ContainerInput{
-				Detail: m.detail,
-				Stats:  m.stats,
-				Logs:   m.logs,
-			})
-		} else {
-			return s.Muted.Render(tr.DiagHint)
-		}
-	}
-
-	var b strings.Builder
-	diagHealth := HealthError
-	if diag.Category == diagnose.CatHealthy {
-		diagHealth = HealthOK
-	} else if diag.Category == diagnose.CatCPUThrottling {
-		diagHealth = HealthDegraded
-	}
-	fmt.Fprintf(&b, "%s  %s\n\n",
-		s.Title.Render(tr.DiagTitle+diag.Container),
-		s.StatusBadge(diagHealth, fmt.Sprintf(" %s · %s ", diag.Category, diag.FaultLabel)),
-	)
-
-	policyChoice := string(diag.PolicyChoice)
-	if policyChoice == "" {
-		policyChoice = string(diag.Category)
-	}
-	policyConf := diag.PolicyConfidence
-	if policyConf == 0 {
-		policyConf = diag.Confidence
-	}
-	bypassBadge := s.StatusBadge(HealthDegraded, " Bedrock Bypass: NO ")
-	if diag.BedrockBypass {
-		bypassBadge = s.StatusBadge(HealthOK, " Bedrock Bypass: YES ")
-	}
-	fmt.Fprintf(&b, "%s  %s\n",
-		s.Section.Render("▸ "+tr.DiagDeciderHdr),
-		s.StatusBadge(diagHealth, " "+policyChoice+" "),
-	)
-	fmt.Fprintf(&b, "  %s · %s · %s\n\n",
-		s.Selected.Render(fmt.Sprintf(tr.DiagCalibConf, policyConf*100)),
-		s.Warn.Render(fmt.Sprintf(tr.DiagLatency, diag.DeciderLatencyMs)),
-		bypassBadge,
-	)
-
-	b.WriteString(s.Selected.Render(tr.DiagWhat) + " " + s.Text.Render(diag.WhatHappened) + "\n")
-	b.WriteString(s.Selected.Render(tr.DiagWhy) + " " + s.Text.Render(diag.WhyItHappened) + "\n\n")
-
-	b.WriteString(s.Title.Render(tr.DiagTreeTitle) + "\n")
-	for _, node := range diag.RootCauseTree {
-		b.WriteString("  " + s.Warn.Render(node) + "\n")
-	}
-
-	b.WriteString("\n" + s.Title.Render(tr.DiagRunbook) + "\n")
-	for i, cmd := range diag.Runbook {
-		fmt.Fprintf(&b, "  %s %s\n", s.Selected.Render(fmt.Sprintf("%d.", i+1)), s.Text.Render(cmd))
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
