@@ -1,5 +1,5 @@
-// Command okshield is a lightweight TUI for Docker infrastructure inspection,
-// deterministic log clustering and incident diagnosis.
+// Command okshield is a lightweight TUI for Docker infrastructure inspection
+// and deterministic log clustering.
 package main
 
 import (
@@ -10,7 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 	"github.com/CarlosArguelloDev/okshield/internal/tui"
@@ -19,7 +18,7 @@ import (
 
 func main() {
 	showVersion := flag.Bool("version", false, "print build information and exit")
-	oneShot := flag.Bool("pulse", false, "run deterministic /whatsup + /diagnose report once and exit")
+	oneShot := flag.Bool("pulse", false, "run deterministic /whatsup report once and exit")
 	dockerHost := flag.String("docker-host", os.Getenv("DOCKER_HOST"), "Docker daemon endpoint (unix://, tcp://, npipe://)")
 	langFlag := flag.String("lang", envOr("OKSHIELD_LANG", "es"), "UI language (es|en)")
 	flag.Parse()
@@ -90,13 +89,6 @@ func runOneShot(ctx context.Context, cli *docker.Client) error {
 			fmt.Printf("    [%s] x%d: %s\n", cl.Severity, cl.Count, cl.Template)
 		}
 	}
-	fmt.Println("\n=== OKSHIELD /DIAGNOSE ===")
-	for _, in := range inputs {
-		diag := diagnose.Classify(in)
-		fmt.Printf("- %s -> %s [%s] (conf=%.0f%%)\n  What: %s\n  Fix:  %s\n",
-			diag.Container, diag.Category, diag.FaultLabel, diag.Confidence*100,
-			diag.WhatHappened, firstOrEmpty(diag.Runbook))
-	}
 	return nil
 }
 
@@ -105,11 +97,4 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func firstOrEmpty(s []string) string {
-	if len(s) == 0 {
-		return ""
-	}
-	return s[0]
 }
