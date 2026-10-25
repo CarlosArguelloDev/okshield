@@ -13,7 +13,6 @@ import (
 	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
-	"github.com/CarlosArguelloDev/okshield/internal/telemetry"
 )
 
 // View is the infrastructure resource shown in the sidebar.
@@ -79,10 +78,6 @@ type Options struct {
 	Ctx context.Context
 	// Docker is the Engine API client (nil disables Docker features).
 	Docker DockerAPI
-	// Store is the telemetry ring-buffer + warm store.
-	Store *telemetry.Store
-	// Receiver is the embedded OTLP receiver.
-	Receiver *telemetry.Receiver
 	// Lang sets the initial display language (LangES by default).
 	Lang Lang
 }
@@ -93,15 +88,12 @@ type Model struct {
 	width  int
 	height int
 
-	ctx      context.Context
-	api      DockerAPI
-	store    *telemetry.Store
-	receiver *telemetry.Receiver
+	ctx context.Context
+	api DockerAPI
 
 	hostname string
 	memAlloc uint64
 	docker   ConnState
-	otel     ConnState
 
 	view       View
 	tab        Tab
@@ -133,7 +125,6 @@ type Model struct {
 	input    textinput.Model
 	status   string
 	showHelp bool
-	showOtel bool
 }
 
 // New builds the root model.
@@ -155,15 +146,6 @@ func New(opts Options) Model {
 	ti.PromptStyle = s.Prompt
 	ti.PlaceholderStyle = s.Muted
 
-	otelState := ConnUnknown
-	if opts.Receiver != nil {
-		if opts.Receiver.Stats().Listening {
-			otelState = ConnUp
-		} else {
-			otelState = ConnDown
-		}
-	}
-
 	cpuBar := progress.New(
 		progress.WithSolidFill(string(ColorFocus)),
 		progress.WithoutPercentage(),
@@ -179,10 +161,7 @@ func New(opts Options) Model {
 		styles:   s,
 		ctx:      opts.Ctx,
 		api:      opts.Docker,
-		store:    opts.Store,
-		receiver: opts.Receiver,
 		hostname: host,
-		otel:     otelState,
 		lang:     opts.Lang,
 		history:  make(map[string]*MetricSeries),
 		cpuBar:   cpuBar,
@@ -248,7 +227,7 @@ func (m Model) detailCmd() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return fetchDetail(m.ctx, m.api, m.store, c.ID)
+	return fetchDetail(m.ctx, m.api, c.ID)
 }
 
 // metricsCmd polls live stats for the selected container (or the first running

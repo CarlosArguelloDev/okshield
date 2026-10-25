@@ -17,13 +17,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case memTickMsg:
 		m.memAlloc = msg.alloc
-		if m.receiver != nil {
-			if m.receiver.Stats().Listening {
-				m.otel = ConnUp
-			} else {
-				m.otel = ConnDown
-			}
-		}
 		return m, sampleMem()
 
 	case refreshTickMsg:
@@ -75,17 +68,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			msg.diag.Container, msg.diag.Category, msg.diag.FaultLabel)
 		return m, nil
 
-	case pruneMsg:
-		m.status = fmt.Sprintf("/prune-telemetry: %d registros antiguos eliminados", msg.removed)
-		return m, nil
-
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		if m.showHelp || m.showOtel {
+		if m.showHelp {
 			m.showHelp = false
-			m.showOtel = false
 			return m, nil
 		}
 		if m.focus == FocusCommand {
@@ -282,18 +270,6 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		m.status = "vista: " + m.view.String()
 		return m, m.detailCmd()
-	case CmdOtelStatus:
-		m.showOtel = true
-		m.status = "/otel status"
-	case CmdPruneTelemetry:
-		if m.store == nil {
-			m.status = "/prune-telemetry: almacén no inicializado"
-			return m, nil
-		}
-		st := m.store
-		return m, func() tea.Msg {
-			return pruneMsg{removed: st.Prune(time.Now())}
-		}
 	case CmdLang:
 		if len(c.Args) > 0 {
 			if l, ok := ParseLang(c.Args[0]); ok {

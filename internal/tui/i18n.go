@@ -116,16 +116,6 @@ type Catalog struct {
 	DiagWhy        string
 	DiagTreeTitle  string
 	DiagRunbook    string
-
-	OtelTitle     string
-	OtelInactive  string
-	OtelListening string
-	OtelReceiver  string
-	OtelRing      string
-	OtelBatch     string
-	OtelRows      string
-	OtelSize      string
-	OtelLimits    string
 }
 
 var catalogES = Catalog{
@@ -212,16 +202,6 @@ var catalogES = Catalog{
 	DiagWhy:        "Por qué pasó:",
 	DiagTreeTitle:  "Causa Raíz (Árbol de Decisión)",
 	DiagRunbook:    "Guía de Resolución (Runbook)",
-
-	OtelTitle:     "Estado de Telemetría OTLP & DuckDB",
-	OtelInactive:  "inactivo",
-	OtelListening: "escuchando",
-	OtelReceiver:  "receptor",
-	OtelRing:      "%d / %d líneas (total ingerido: %d)",
-	OtelBatch:     "%d lotes volcados (cada 2s o 500 regs)",
-	OtelRows:      "%d registros",
-	OtelSize:      "tamaño DB",
-	OtelLimits:    "límites DB",
 }
 
 var catalogEN = Catalog{
@@ -308,16 +288,6 @@ var catalogEN = Catalog{
 	DiagWhy:        "Why it happened:",
 	DiagTreeTitle:  "Root Cause (Decision Tree)",
 	DiagRunbook:    "Resolution Guide (Runbook)",
-
-	OtelTitle:     "OTLP & DuckDB Telemetry Status",
-	OtelInactive:  "inactive",
-	OtelListening: "listening",
-	OtelReceiver:  "receiver",
-	OtelRing:      "%d / %d lines (total ingested: %d)",
-	OtelBatch:     "%d batches flushed (every 2s or 500 recs)",
-	OtelRows:      "%d records",
-	OtelSize:      "DB size",
-	OtelLimits:    "DB limits",
 }
 
 func (m Model) tr() Catalog {

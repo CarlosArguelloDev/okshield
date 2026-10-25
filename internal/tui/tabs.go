@@ -6,7 +6,6 @@ import (
 
 	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
-	"github.com/CarlosArguelloDev/okshield/internal/telemetry"
 )
 
 func (m Model) renderPulse(maxLines int) string {
@@ -172,43 +171,6 @@ func (m Model) renderDiagnose() string {
 		fmt.Fprintf(&b, "  %s %s\n", s.Selected.Render(fmt.Sprintf("%d.", i+1)), s.Text.Render(cmd))
 	}
 	return strings.TrimRight(b.String(), "\n")
-}
-
-func (m Model) renderOtelStatus() string {
-	s := m.styles
-	tr := m.tr()
-	var st telemetry.StoreStats
-	if m.receiver != nil {
-		st = m.receiver.Stats()
-	} else if m.store != nil {
-		st = m.store.Stats(telemetry.DefaultOTLPGRPCAddr, telemetry.DefaultOTLPHTTPAddr, false)
-	} else {
-		st = telemetry.StoreStats{
-			RingCap:     telemetry.DefaultRingCapacity,
-			MemoryLimit: "64MB",
-			Threads:     2,
-			GRPCAddr:    telemetry.DefaultOTLPGRPCAddr,
-			HTTPAddr:    telemetry.DefaultOTLPHTTPAddr,
-		}
-	}
-
-	var b strings.Builder
-	b.WriteString(s.Title.Render(tr.OtelTitle) + "\n\n")
-	k := kv{b: &b, s: s}
-	stateStr := s.StatusBadge(HealthError, GlyphDown) + " " + s.Warn.Render(tr.OtelInactive)
-	if st.Listening {
-		stateStr = s.StatusBadge(HealthOK, GlyphOK) + " " + s.OK.Render(tr.OtelListening)
-	}
-	k.row(tr.OtelReceiver, stateStr)
-	k.row("OTLP gRPC", st.GRPCAddr)
-	k.row("OTLP HTTP", st.HTTPAddr+" (/v1/logs, /v1/metrics)")
-	k.row("ring buffer", fmt.Sprintf(tr.OtelRing, st.RingLen, st.RingCap, st.TotalIngested))
-	k.row("batch writer", fmt.Sprintf(tr.OtelBatch, st.BatchesFlushed))
-	k.row("DuckDB rows", fmt.Sprintf(tr.OtelRows, st.StoredRows))
-	k.row(tr.OtelSize, humanBytes(uint64(max(0, st.DiskBytes))))
-	k.row(tr.OtelLimits, fmt.Sprintf("memory_limit=%s · threads=%d · TTL=%s", st.MemoryLimit, st.Threads, st.Retention))
-	b.WriteString("\n" + s.Muted.Render(tr.HelpFooterAny))
-	return s.Overlay.Render(b.String())
 }
 
 func (m Model) formatCluster(cl summarizer.LogCluster) string {

@@ -22,9 +22,6 @@ func (m Model) View() string {
 	if m.focus == FocusCommand || m.showHelp {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderHelp())
 	}
-	if m.showOtel {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderOtelStatus())
-	}
 
 	botH := bottomH
 	if m.height < 20 {
@@ -104,10 +101,9 @@ func (m Model) renderSidebar(w, h int) string {
 	fmt.Fprintf(&b, "  %s %s\n", s.Muted.Render("host"), s.Text.Render(truncate(m.hostname, max(4, innerW-9))))
 	fmt.Fprintf(&b, "  %s %s  %s %s\n",
 		s.Muted.Render("dkr"), m.connGlyph(m.docker),
-		s.Muted.Render("otlp"), m.connGlyph(m.otel),
-	)
-	fmt.Fprintf(&b, "  %s %s  %s %s\n\n",
 		s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)),
+	)
+	fmt.Fprintf(&b, "  %s %s\n\n",
 		s.Muted.Render("lang"), s.StatusBadge(HealthInfo, " "+m.lang.Code()+" "),
 	)
 

@@ -208,7 +208,7 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 
 	// Move cursor down to row 1 ("api") and fetch its detail.
 	model = key(model, "j")
-	det := fetchDetail(context.Background(), fd, nil, "11111111111122222222")()
+	det := fetchDetail(context.Background(), fd, "11111111111122222222")()
 	m, _ = model.Update(det)
 	model = m.(Model)
 

@@ -12,8 +12,6 @@ const (
 	CmdContainers
 	CmdNetworks
 	CmdVolumes
-	CmdOtelStatus
-	CmdPruneTelemetry
 	CmdLang
 	CmdHelp
 	CmdQuit
@@ -44,8 +42,6 @@ var commandTable = []commandSpec{
 	{CmdContainers, []string{"containers", "c"}, "/containers", "Vista de contenedores", "Containers view", "1"},
 	{CmdNetworks, []string{"networks", "n"}, "/networks", "Vista de redes", "Networks view", "2"},
 	{CmdVolumes, []string{"volumes", "v"}, "/volumes", "Vista de volúmenes", "Volumes view", "3"},
-	{CmdOtelStatus, []string{"otel"}, "/otel status", "Estado del receptor OTLP y DuckDB", "OTLP receiver and DuckDB status", ""},
-	{CmdPruneTelemetry, []string{"prune-telemetry", "prune"}, "/prune-telemetry", "Borra telemetría antigua en DuckDB", "Prune old telemetry in DuckDB", ""},
 	{CmdLang, []string{"lang", "language", "idioma"}, "/lang [es|en]", "Cambia el idioma entre Español e Inglés", "Switch language between Spanish and English", "i"},
 	{CmdHelp, []string{"help", "h"}, "/help", "Muestra esta ayuda", "Show this help overlay", ""},
 	{CmdQuit, []string{"quit", "q", "exit"}, "/quit", "Salir de OkShield", "Exit OkShield", "ctrl+c"},
@@ -67,12 +63,7 @@ func ParseCommand(input string) Command {
 			if n != name {
 				continue
 			}
-			cmd := Command{Kind: spec.Kind, Name: spec.Names[0], Args: args, Raw: raw}
-			// "/otel" requires the "status" subcommand (default to it).
-			if spec.Kind == CmdOtelStatus && len(args) > 0 && strings.ToLower(args[0]) != "status" {
-				cmd.Kind = CmdUnknown
-			}
-			return cmd
+			return Command{Kind: spec.Kind, Name: spec.Names[0], Args: args, Raw: raw}
 		}
 	}
 	return Command{Kind: CmdUnknown, Name: name, Args: args, Raw: raw}

@@ -9,7 +9,6 @@ import (
 	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
-	"github.com/CarlosArguelloDev/okshield/internal/telemetry"
 )
 
 // DockerAPI is the subset of the Docker client used by the TUI. It allows
@@ -64,11 +63,6 @@ type diagnoseMsg struct {
 	err  error
 }
 
-// pruneMsg reports how many warm-store telemetry rows were pruned.
-type pruneMsg struct {
-	removed int
-}
-
 // refreshTickMsg triggers the next periodic snapshot.
 type refreshTickMsg struct{}
 
@@ -105,7 +99,7 @@ func fetchResources(parent context.Context, api DockerAPI) tea.Cmd {
 
 // fetchDetail inspects a single container and, if supported, fetches its live
 // stats and tail logs off the UI goroutine.
-func fetchDetail(parent context.Context, api DockerAPI, store *telemetry.Store, id string) tea.Cmd {
+func fetchDetail(parent context.Context, api DockerAPI, id string) tea.Cmd {
 	if api == nil || id == "" {
 		return nil
 	}
@@ -124,16 +118,6 @@ func fetchDetail(parent context.Context, api DockerAPI, store *telemetry.Store, 
 			if lines, lerr := tel.ContainerLogs(ctx, id, docker.MaxLogLines); lerr == nil {
 				msg.logs = lines
 				msg.clusters = summarizer.ClusterLogs(lines)
-				if store != nil && len(lines) > 0 {
-					last := lines[len(lines)-1]
-					sev, _ := summarizer.NormalizeLine(last)
-					store.Append(telemetry.LogRecord{
-						Timestamp: time.Now(),
-						Source:    d.Name,
-						Severity:  sev,
-						Body:      last,
-					})
-				}
 			}
 		}
 		return msg
