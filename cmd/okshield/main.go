@@ -1,5 +1,5 @@
-// Command okshield is a lightweight TUI for Docker inspection, OpenTelemetry
-// ingestion and deterministic incident diagnosis.
+// Command okshield is a lightweight TUI for Docker infrastructure inspection,
+// deterministic log clustering and incident diagnosis.
 package main
 
 import (
@@ -7,14 +7,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/CarlosArguelloDev/okshield/internal/diagnose"
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
-	"github.com/CarlosArguelloDev/okshield/internal/telemetry"
 	"github.com/CarlosArguelloDev/okshield/internal/tui"
 	"github.com/CarlosArguelloDev/okshield/internal/version"
 )
@@ -23,9 +21,6 @@ func main() {
 	showVersion := flag.Bool("version", false, "print build information and exit")
 	oneShot := flag.Bool("pulse", false, "run deterministic /whatsup + /diagnose report once and exit")
 	dockerHost := flag.String("docker-host", os.Getenv("DOCKER_HOST"), "Docker daemon endpoint (unix://, tcp://, npipe://)")
-	dbPath := flag.String("db", envOr("OKSHIELD_DB_PATH", "./data/okshield.duckdb"), "path to warm telemetry store")
-	grpcAddr := flag.String("otlp-grpc", envOr("OKSHIELD_OTLP_GRPC_ADDR", telemetry.DefaultOTLPGRPCAddr), "OTLP gRPC listen address")
-	httpAddr := flag.String("otlp-http", envOr("OKSHIELD_OTLP_HTTP_ADDR", telemetry.DefaultOTLPHTTPAddr), "OTLP HTTP listen address")
 	langFlag := flag.String("lang", envOr("OKSHIELD_LANG", "es"), "UI language (es|en)")
 	flag.Parse()
 
@@ -52,19 +47,11 @@ func main() {
 		return
 	}
 
-	store := telemetry.NewStore(*dbPath, 24*time.Hour)
-	defer store.Close()
-
-	rcv := telemetry.NewReceiver(store, *grpcAddr, *httpAddr)
-	_ = rcv.Start(ctx)
-
 	uiLang, _ := tui.ParseLang(*langFlag)
 	p := tea.NewProgram(tui.New(tui.Options{
-		Ctx:      ctx,
-		Docker:   cli,
-		Store:    store,
-		Receiver: rcv,
-		Lang:     uiLang,
+		Ctx:    ctx,
+		Docker: cli,
+		Lang:   uiLang,
 	}), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "okshield:", err)
