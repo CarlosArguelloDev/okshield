@@ -5,7 +5,7 @@ Este documento define las reglas obligatorias para cualquier agente de IA o desa
 ---
 
 ## 1. Visión General de OkShield
-**OkShield** es una TUI (Terminal User Interface) de alto rendimiento y bajo consumo escrita en Go puro para inspección de infraestructura Docker (contenedores, redes, volúmenes), síntesis determinista de logs (*Drain-like clustering*) y diagnóstico de fallos basado en modelos de decisión. Funciona 100% en memoria, con cero escrituras a disco, protegiendo medios flash (como tarjetas MicroSD en Raspberry Pi) y consumiendo menos de 20MB de RAM.
+**OkShield** es una TUI (Terminal User Interface) de alto rendimiento y bajo consumo escrita en Go puro para inspección de infraestructura Docker (contenedores, redes, volúmenes), métricas en tiempo real y síntesis determinista de logs (*Drain-like clustering* con detección de anomalías vía `/whatsup`). Funciona 100% en memoria, con cero escrituras a disco, protegiendo medios flash (como tarjetas MicroSD en Raspberry Pi) y consumiendo menos de 20MB de RAM.
 
 ---
 
@@ -26,21 +26,18 @@ Este documento define las reglas obligatorias para cualquier agente de IA o desa
 ```text
 +-----------------------------------------------------------------------+
 |                       OkShield TUI (Bubble Tea)                       |
-|  [Header: Host/RAM] [Sidebar: Containers/Net/Vol] [Main: Pulse/Diag]  |
-|  [Command Bar / Overlay: /whatsup | /diagnose | /networks | /volumes] |
+|  [Header: Host/RAM] [Sidebar: Containers/Net/Vol] [Main: Resumen/Logs]|
+|  [Command Bar: /whatsup | /containers | /networks | /volumes | /lang]  |
 +-----------------------------------+-----------------------------------+
                                     |
                                     | tea.Msg / tea.Cmd (Async)
                                     v
 +-----------------------------------------------------------------------+
 |                     Core Processing Layer (Go)                        |
-|  1. Deterministic Summarizer (Sin IA):                                |
-|     - Drain-like Log Clustering (extrae plantillas de miles de logs)  |
-|     - Correlador de estados (ExitCodes, OOM, Restart Counts, Spikes)  |
-|  2. Decision & Classification Engine (Decision Models):               |
-|     - Recibe SOLO el resumen compacto (nunca logs crudos masivos)     |
-|     - Clasifica la anomalía por taxonomía de error                    |
-|     - Genera árbol de causa raíz + Runbook de solución                |
+|  Deterministic Summarizer (Sin IA / 100% Go):                         |
+|  - Drain-like Log Clustering (extrae plantillas de miles de logs)     |
+|  - Correlador de estados (ExitCodes, OOM, Restart Counts, Spikes)     |
+|  - Reporte compacto de salud y anomalías por contenedor               |
 +-----------------------------------+-----------------------------------+
                                     |
                                     v
@@ -52,21 +49,10 @@ Este documento define las reglas obligatorias para cualquier agente de IA o desa
 +-----------------------------------------------------------------------+
 ```
 
-## 4. Diseño de los Motores de Análisis
-
-### Fase A: Resumen Determinista (Sin IA) — Comando `/whatsup`
-Antes de usar cualquier modelo de IA, OkShield sintetiza lo que ocurre con algoritmos puros en Go:
+## 4. Motores de Análisis: Resumen Determinista (`/whatsup`)
+OkShield sintetiza lo que ocurre con algoritmos deterministas en Go puro:
 1. **Normalización y Clustering de Logs:** Reemplazar UUIDs, IPs, timestamps, rutas y números por comodines (`<IP>`, `<NUM>`, `<HEX>`) para agrupar 10,000 líneas repetitivas en patrones únicos con su contador de frecuencia y severidad (`[ERROR] x432: Connection refused to <IP>:<PORT>`).
-2. **Detección de Anomalías Estadísticas:** Detectar picos de CPU/RAM y cambios de estado en Docker (`Restarting`, `OOMKilled`, `ExitCode != 0`).
-
-### Fase B: Clasificación y Diagnóstico (Decision Models) — Comando `/diagnose`
-Una vez sintetizado el problema, el clasificador evalúa el vector de características `(LogPattern, ExitCode, MemoryDelta, NetworkErrors, VolumeMounts)` para clasificar el incidente en categorías accionables:
-- `MEMORY_EXHAUSTION` (OOM / Memory Leak)
-- `NETWORK_UNREACHABLE` (DNS fail, Port mismatch, Bridge isolation)
-- `STORAGE_PERMISSION_OR_FULL` (Volume mount error, Read-only FS, Disk full)
-- `DEPENDENCY_TIMEOUT` (DB/Cache down, Deadlock)
-- `CONFIG_PANIC` (Missing ENV, Invalid syntax on startup)
-Cada clasificación devuelve una **Guía de Resolución** estructurada (Qué pasó -> Por qué pasó -> Comandos exactos para arreglarlo).
+2. **Detección de Anomalías Estadísticas:** Detectar picos de CPU/RAM y cambios de estado en Docker (`Restarting`, `OOMKilled`, `ExitCode != 0`, CPU throttling).
 
 ---
 
@@ -95,7 +81,7 @@ Dado que OkShield corre incluso en SBCs como Raspberry Pi:
 - **Seguridad:** NUNCA escribir contraseñas ni IPs privadas dentro de archivos `.go` o scripts trackeados por Git. Leer siempre desde variables de entorno (`.env` incluido en `.gitignore`): `RPI_HOST`, `RPI_USER`, `RPI_PASS`.
 - Para desplegar y probar en la Raspberry Pi:
   - Compilar para ARM64 (`CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/okshield-linux-arm64 ./cmd/okshield`).
-  - Puedes levantar contenedores ligeros de prueba en la Pi (`alpine`, `nginx`, `redis`) simulando fallos (ej. `stress-ng` para límite de memoria, comandos que fallen con exit 1, redes desconectadas) para verificar que `/whatsup` y `/diagnose` detectan y resumen todo correctamente.
+  - Puedes levantar contenedores ligeros de prueba en la Pi (`alpine`, `nginx`, `redis`) simulando fallos para verificar que `/whatsup` y las métricas responden correctamente.
 
 ---
 
@@ -105,14 +91,12 @@ cmd/okshield/        -> main (wiring, flags, arranque de la TUI)
 internal/tui/        -> modelos Bubble Tea, estilos lipgloss, overlays, command bar
 internal/docker/     -> cliente Docker SDK (contenedores, redes, volúmenes, stats, logs)
 internal/summarizer/ -> normalización + clustering drain-like + detección de anomalías
-internal/diagnose/   -> decision models, taxonomía de errores, runbooks
 internal/version/    -> metadata de build (inyectada con -ldflags)
-decider_patterns/   -> especificaciones y tests de decisión de fallos
 ```
-- **Todo bajo `internal/`** salvo `cmd/` y `decider_patterns/`: no exponemos API pública.
-- **I/O siempre asíncrono:** Docker e inferencia se ejecutan como `tea.Cmd` o goroutines que emiten `tea.Msg`. `Update()` y `View()` jamás bloquean.
+- **Todo bajo `internal/`** salvo `cmd/`: no exponemos API pública.
+- **I/O siempre asíncrono:** Docker se ejecuta como `tea.Cmd` o goroutines que emiten `tea.Msg`. `Update()` y `View()` jamás bloquean.
 - **Context first:** toda función que haga I/O recibe `context.Context` como primer parámetro.
-- **Tests:** cada paquete de lógica pura (`summarizer`, `diagnose`, `docker`) debe tener tests de tabla; incluir benchmarks para el hot path.
+- **Tests:** cada paquete de lógica pura (`summarizer`, `docker`, `tui`) debe tener tests de tabla; incluir benchmarks para el hot path.
 - **Calidad antes de commit:** `gofmt -l .` vacío, `go vet ./...`, `go build ./...` y `go test ./...` en verde.
 
 ## 9. Secretos y Entorno Local
