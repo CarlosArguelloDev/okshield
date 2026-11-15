@@ -301,8 +301,8 @@ func (m Model) renderMetadataBox(w, h int) string {
 			row("Scope", "General (All)")
 			row("Host", m.hostname)
 			row("Containers", fmt.Sprintf("%d total", len(m.containers)))
-			row("Networks", fmt.Sprintf("%d redes", len(m.networks)))
-			row("Volumes", fmt.Sprintf("%d volúmenes", len(m.volumes)))
+			row("Networks", fmt.Sprintf("%d networks", len(m.networks)))
+			row("Volumes", fmt.Sprintf("%d volumes", len(m.volumes)))
 			fields = 5
 		}
 	}
