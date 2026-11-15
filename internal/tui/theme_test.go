@@ -58,3 +58,30 @@ func TestRenderBoxDimensionsAndBadges(t *testing.T) {
 		}
 	}
 }
+
+func TestWrapBody(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		width    int
+		minLines int
+	}{
+		{"short", "hello world", 20, 1},
+		{"word_wrap", "Container in restart loop (Restarting) with many details", 20, 3},
+		{"unbroken_json", `{"time":"2026-11-15T19:17:03Z","level":"INFO","msg":"http request"}`, 24, 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wrapBody(tt.body, tt.width)
+			lines := strings.Split(got, "\n")
+			if len(lines) < tt.minLines {
+				t.Errorf("got %d lines, want >= %d:\n%s", len(lines), tt.minLines, got)
+			}
+			for i, l := range lines {
+				if w := lipgloss.Width(l); w > tt.width {
+					t.Errorf("line %d width %d > %d: %q", i, w, tt.width, l)
+				}
+			}
+		})
+	}
+}

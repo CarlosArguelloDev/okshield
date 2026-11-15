@@ -101,7 +101,7 @@ func (m Model) renderLogs(maxLines int) string {
 
 	b.WriteString("\n" + s.Title.Render(tr.LogsRecent) + "\n")
 	for _, line := range m.logs {
-		b.WriteString("  " + s.Muted.Render(truncate(line, max(20, m.width-40))) + "\n")
+		b.WriteString("  " + s.Muted.Render(line) + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

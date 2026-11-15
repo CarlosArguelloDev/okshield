@@ -167,7 +167,12 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					botH = max(5, m.height/3)
 				}
 				bodyRows := max(1, max(6, m.height-botH)-4)
-				if maxOff := max(0, countLines(m.inspectorBody(bodyRows))-bodyRows); m.mainScroll < maxOff {
+				_, _, inspectorW := m.topColumnWidths()
+				body := m.inspectorBody(bodyRows)
+				if m.tab != TabMetrics {
+					body = wrapBody(body, max(1, inspectorW-4))
+				}
+				if maxOff := max(0, countLines(body)-bodyRows); m.mainScroll < maxOff {
 					m.mainScroll++
 				}
 			}

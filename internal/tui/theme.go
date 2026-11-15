@@ -267,3 +267,24 @@ func padOrClip(s string, width int) string {
 	pad := max(0, contentW-w)
 	return " " + s + strings.Repeat(" ", pad) + " "
 }
+
+// wrapBody wraps any line in body that exceeds contentW visible columns so
+// box panes show full text across multiple lines instead of clipping it.
+func wrapBody(body string, contentW int) string {
+	if body == "" || contentW <= 0 {
+		return body
+	}
+	lines := strings.Split(body, "\n")
+	out := make([]string, 0, len(lines))
+	style := lipgloss.NewStyle().Width(contentW)
+	for _, line := range lines {
+		if lipgloss.Width(line) <= contentW {
+			out = append(out, line)
+			continue
+		}
+		for _, wl := range strings.Split(style.Render(line), "\n") {
+			out = append(out, strings.TrimRight(wl, " "))
+		}
+	}
+	return strings.Join(out, "\n")
+}

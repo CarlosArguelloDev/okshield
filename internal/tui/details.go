@@ -111,9 +111,7 @@ func (m Model) renderMetrics(bodyRows int) string {
 		chartStyle = s.Title
 	}
 
-	sideW := max(minSidebarW, m.width/6)
-	remW := max(20, m.width-sideW)
-	inspectorW := max(20, remW-max(24, remW*26/100))
+	_, _, inspectorW := m.topColumnWidths()
 	chartW := max(20, inspectorW-15)
 	chartH := clampInt(bodyRows-10, 6, 12)
 

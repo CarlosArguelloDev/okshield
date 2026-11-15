@@ -35,11 +35,21 @@ func (m Model) View() string {
 	)
 }
 
-func (m Model) renderTopRow(h int) string {
-	sideW := max(minSidebarW, m.width/6)
+func (m Model) topColumnWidths() (sideW, browserW, inspectorW int) {
+	sideW = max(minSidebarW, m.width/6)
 	remW := max(20, m.width-sideW)
-	browserW := max(24, remW*26/100)
-	inspectorW := max(20, remW-browserW)
+	browserW = max(28, remW*32/100)
+	if remW > 68 {
+		browserW = min(browserW, remW-40)
+	} else {
+		browserW = min(browserW, max(20, remW/2))
+	}
+	inspectorW = max(20, remW-browserW)
+	return sideW, browserW, inspectorW
+}
+
+func (m Model) renderTopRow(h int) string {
+	sideW, browserW, inspectorW := m.topColumnWidths()
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		m.renderSidebar(sideW, h),
@@ -185,7 +195,12 @@ func (m Model) renderInspector(w, h int) string {
 	header := strings.Join(tabs, s.Muted.Render(" │ "))
 
 	bodyRows := max(1, h-4)
-	body := scrollLines(m.inspectorBody(bodyRows), m.mainScroll, bodyRows)
+	contentW := max(1, w-4)
+	rawBody := m.inspectorBody(bodyRows)
+	if m.tab != TabMetrics {
+		rawBody = wrapBody(rawBody, contentW)
+	}
+	body := scrollLines(rawBody, m.mainScroll, bodyRows)
 
 	borderColor := ColorSecondary
 	if m.focus == FocusMain {
@@ -240,6 +255,8 @@ func (m Model) renderProcessesBox(w, h int) string {
 		b.WriteString(s.StatusBadge(HealthOK, GlyphOK) + " " + s.Muted.Render(m.tr().NoAnomalies))
 	}
 	bodyRows := max(1, h-2)
+	contentW := max(1, w-4)
+	wrapped := wrapBody(strings.TrimRight(b.String(), "\n"), contentW)
 	borderColor := ColorSecondary
 	if m.focus == FocusProcesses {
 		borderColor = ColorFocus
@@ -249,7 +266,7 @@ func (m Model) renderProcessesBox(w, h int) string {
 		Height:      h,
 		BorderColor: borderColor,
 		TopTitle:    "Processes",
-		Body:        scrollLines(strings.TrimRight(b.String(), "\n"), m.procScroll, bodyRows),
+		Body:        scrollLines(wrapped, m.procScroll, bodyRows),
 		FootBadges:  []string{fmt.Sprintf("%d/%d", anomalies, len(m.containers))},
 	})
 }
@@ -310,6 +327,8 @@ func (m Model) renderMetadataBox(w, h int) string {
 		b.WriteString(s.Muted.Render(m.tr().NoResource))
 	}
 	bodyRows := max(1, h-2)
+	contentW := max(1, w-4)
+	wrapped := wrapBody(strings.TrimRight(b.String(), "\n"), contentW)
 	borderColor := ColorSecondary
 	if m.focus == FocusMetadata {
 		borderColor = ColorFocus
@@ -319,7 +338,7 @@ func (m Model) renderMetadataBox(w, h int) string {
 		Height:      h,
 		BorderColor: borderColor,
 		TopTitle:    "Metadata",
-		Body:        scrollLines(strings.TrimRight(b.String(), "\n"), m.metaScroll, bodyRows),
+		Body:        scrollLines(wrapped, m.metaScroll, bodyRows),
 		FootBadges:  []string{fmt.Sprintf("%d/%d", min(1, fields), fields)},
 	})
 }
