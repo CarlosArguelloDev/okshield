@@ -79,28 +79,28 @@ func Analyze(inputs []ContainerInput, maxClusters int) Report {
 
 		var anomalies []string
 		if d.OOMKilled {
-			anomalies = append(anomalies, "OOMKilled detectado por el kernel (memoria agotada)")
+			anomalies = append(anomalies, "OOMKilled detected by kernel (out of memory)")
 		}
 		if !d.Running && d.ExitCode != 0 {
-			anomalies = append(anomalies, fmt.Sprintf("Proceso terminó con ExitCode=%d", d.ExitCode))
+			anomalies = append(anomalies, fmt.Sprintf("Process exited with ExitCode=%d", d.ExitCode))
 		}
 		if d.Restarting {
-			anomalies = append(anomalies, "Contenedor en bucle de reinicio (Restarting)")
+			anomalies = append(anomalies, "Container in restart loop (Restarting)")
 		}
 		if d.RestartCount > 0 {
-			anomalies = append(anomalies, fmt.Sprintf("%d reinicios acumulados", d.RestartCount))
+			anomalies = append(anomalies, fmt.Sprintf("%d accumulated restarts", d.RestartCount))
 		}
 		if d.Health == "unhealthy" {
-			anomalies = append(anomalies, "Healthcheck en estado UNHEALTHY")
+			anomalies = append(anomalies, "Healthcheck status UNHEALTHY")
 		}
 		if st.CPUPercent >= HighCPUThreshold {
-			anomalies = append(anomalies, fmt.Sprintf("Pico de CPU: %.1f%%", st.CPUPercent))
+			anomalies = append(anomalies, fmt.Sprintf("CPU spike: %.1f%%", st.CPUPercent))
 		}
 		if st.MemPercent >= HighMemThreshold {
-			anomalies = append(anomalies, fmt.Sprintf("Presión de RAM: %.1f%%", st.MemPercent))
+			anomalies = append(anomalies, fmt.Sprintf("RAM pressure: %.1f%%", st.MemPercent))
 		}
 		if st.Throttled > 0 {
-			anomalies = append(anomalies, fmt.Sprintf("CPU throttling activo (%d periodos)", st.Throttled))
+			anomalies = append(anomalies, fmt.Sprintf("CPU throttling active (%d periods)", st.Throttled))
 		}
 
 		top := clusters
