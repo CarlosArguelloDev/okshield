@@ -26,7 +26,7 @@ var (
 	ColorSurface   = lipgloss.Color("#1D2021") // deep warm charcoal
 
 	// Solid pill-badge colors (AGENTS.md §6).
-	ColorBadgeOK   = lipgloss.Color("#22C55E") // true green background (dark text)
+	ColorBadgeOK   = ColorOK                   // soft sage green background (dark text)
 	ColorBadgeWarn = lipgloss.Color("#FFD166") // amber background (dark text)
 	ColorBadgeErr  = lipgloss.Color("#EF476F") // coral red background (white text)
 	ColorBadgeInfo = lipgloss.Color("#00F5D4") // cyan background (dark text)
