@@ -20,7 +20,6 @@ func main() {
 	showVersion := flag.Bool("version", false, "print build information and exit")
 	oneShot := flag.Bool("pulse", false, "run deterministic /whatsup report once and exit")
 	dockerHost := flag.String("docker-host", os.Getenv("DOCKER_HOST"), "Docker daemon endpoint (unix://, tcp://, npipe://)")
-	langFlag := flag.String("lang", envOr("OKSHIELD_LANG", "es"), "UI language (es|en)")
 	flag.Parse()
 
 	if *showVersion {
@@ -46,11 +45,9 @@ func main() {
 		return
 	}
 
-	uiLang, _ := tui.ParseLang(*langFlag)
 	p := tea.NewProgram(tui.New(tui.Options{
 		Ctx:    ctx,
 		Docker: cli,
-		Lang:   uiLang,
 	}), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "okshield:", err)
@@ -90,11 +87,4 @@ func runOneShot(ctx context.Context, cli *docker.Client) error {
 		}
 	}
 	return nil
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
