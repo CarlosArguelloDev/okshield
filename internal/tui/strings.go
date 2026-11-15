@@ -1,37 +1,6 @@
 package tui
 
-import "strings"
-
-// Lang identifies the UI display language.
-type Lang int
-
-const (
-	LangES Lang = iota // Español (default)
-	LangEN             // English
-)
-
-// Code returns the uppercase 2-letter ISO code ("ES" or "EN").
-func (l Lang) Code() string {
-	if l == LangEN {
-		return "EN"
-	}
-	return "ES"
-}
-
-// ParseLang parses a language code ("en", "english", "es", "espanol", "español").
-// It returns (Lang, true) on a recognized language or (LangES, false) otherwise.
-func ParseLang(s string) (Lang, bool) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "en", "eng", "english", "ingles", "inglés":
-		return LangEN, true
-	case "es", "esp", "spanish", "espanol", "español":
-		return LangES, true
-	default:
-		return LangES, false
-	}
-}
-
-// Catalog holds all localized strings for a single language.
+// Catalog holds all UI display strings in English.
 type Catalog struct {
 	Starting         string
 	ConnectingDocker string
@@ -51,7 +20,6 @@ type Catalog struct {
 	CtrlTabs    string
 	CtrlFocus   string
 	CtrlWhatsup string
-	CtrlLang    string
 	CtrlCommand string
 	CtrlQuit    string
 
@@ -106,81 +74,7 @@ type Catalog struct {
 	LogsRecent     string
 }
 
-var catalogES = Catalog{
-	Starting:         "iniciando okshield…",
-	ConnectingDocker: "conectando con docker…",
-	DockerConnected:  "docker conectado · %d contenedores",
-	DockerDown:       "docker no disponible",
-	Loading:          "cargando…",
-	Empty:            "(vacío)",
-	NoSelection:      "sin selección",
-	NoResource:       "Sin recurso seleccionado",
-
-	Views:   [3]string{"Contenedores", "Redes", "Volúmenes"},
-	Tabs:    [4]string{"Resumen", "Métricas", "Detalles", "Logs"},
-	Metrics: [4]string{"CPU %", "Memoria %", "Red RX/TX", "Disco I/O"},
-
-	CtrlScroll:  "Scroll",
-	CtrlViews:   "Vistas",
-	CtrlTabs:    "Pestañas",
-	CtrlFocus:   "Foco",
-	CtrlWhatsup: "Whatsup",
-	CtrlLang:    "Idioma",
-	CtrlCommand: "Comando",
-	CtrlQuit:    "Salir",
-
-	NoAnomalies:     "Sin anomalías activas (? para /whatsup)",
-	HelpPlaceholder: "escribe /help para ver comandos",
-	HelpTitle:       "✦ Comandos de OkShield",
-	HelpPromptLabel: "Comando: ",
-	HelpAvailTitle:  "Comandos Disponibles",
-	HelpDescTitle:   "Descripción y Detalles",
-	HelpFooterCmd:   "enter ejecutar  ·  tab autocompletar  ·  esc cerrar",
-	HelpFooterAny:   "pulsa cualquier tecla para cerrar",
-
-	PulseHint:         "Pulsa ? o escribe /whatsup para sintetizar el estado de tus contenedores (sin IA).",
-	PulseTitle:        "Pulso Determinista (/whatsup)",
-	PulseNoContainers: "No se encontraron contenedores en el host.",
-
-	MetricsNoContainers: "Sin contenedores activos para graficar métricas en tiempo real.",
-	MetricsTitlePrefix:  "Métricas en Tiempo Real · ",
-	MetricsSwitchHint:   "(↑/↓ con foco o 'm' cambia gráfica)",
-	MetricsNow:          "ahora",
-	MetricsRead:         "lect",
-	MetricsWrite:        "escr",
-
-	GeneralSummaryTitle: "Resumen General de Infraestructura",
-	GeneralContainers:   "contenedores",
-	GeneralNetworks:     "redes",
-	GeneralVolumes:      "volúmenes",
-	SectionPorts:        "Puertos",
-	SectionNetworks:     "Redes",
-	SectionMounts:       "Mounts",
-	Unpublished:         "no publicado",
-	ConnectedContainers: "Contenedores conectados",
-	None:                "  ninguno",
-	UsedBy:              "Usado por",
-	OrphanVolume:        "  ningún contenedor (huérfano)",
-	NoLimit:             "sin límite",
-	Yes:                 "sí",
-
-	FieldImage:    "imagen",
-	FieldState:    "estado",
-	FieldRestarts: "reinicios",
-	FieldPolicy:   "política",
-	FieldRAMLimit: "límite RAM",
-	FieldCPULimit: "límite CPU",
-	FieldInternal: "interna",
-	FieldCreated:  "creado",
-
-	LogsSelectHint: "Selecciona un contenedor para inspeccionar sus logs deduplicados.",
-	LogsTitle:      "Plantillas Drain-like",
-	LogsRingCount:  "(%d líneas en ring buffer → %d patrones únicos)",
-	LogsEmpty:      "Sin logs recientes para este contenedor.",
-	LogsRecent:     "Últimas líneas (Ring Buffer)",
-}
-
-var catalogEN = Catalog{
+var uiCatalog = Catalog{
 	Starting:         "starting okshield…",
 	ConnectingDocker: "connecting to docker…",
 	DockerConnected:  "docker connected · %d containers",
@@ -199,7 +93,6 @@ var catalogEN = Catalog{
 	CtrlTabs:    "Tabs",
 	CtrlFocus:   "Focus",
 	CtrlWhatsup: "Whatsup",
-	CtrlLang:    "Lang",
 	CtrlCommand: "Command",
 	CtrlQuit:    "Quit",
 
@@ -255,8 +148,5 @@ var catalogEN = Catalog{
 }
 
 func (m Model) tr() Catalog {
-	if m.lang == LangEN {
-		return catalogEN
-	}
-	return catalogES
+	return uiCatalog
 }

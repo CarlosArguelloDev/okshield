@@ -19,8 +19,6 @@ func TestParseCommand(t *testing.T) {
 		{"/containers", CmdContainers, "containers", nil},
 		{"/networks", CmdNetworks, "networks", nil},
 		{"/volumes", CmdVolumes, "volumes", nil},
-		{"/lang en", CmdLang, "lang", []string{"en"}},
-		{"/idioma es", CmdLang, "lang", []string{"es"}},
 		{"/q", CmdQuit, "quit", nil},
 		{"/nope", CmdUnknown, "nope", nil},
 		{"", CmdUnknown, "", nil},

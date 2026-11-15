@@ -29,8 +29,8 @@ func (k kv) section(title string) {
 	k.b.WriteString("\n" + k.s.Title.Render(title) + "\n")
 }
 
-// renderMetrics renders the dedicated Métricas tab with a large multi-row
-// Unicode Braille chart and interactive metric selector (CPU, Memoria, Red, Disco).
+// renderMetrics renders the dedicated Metrics tab with a large multi-row
+// Unicode Braille chart and interactive metric selector (CPU, Memory, Net, Disk).
 func (m Model) renderMetrics(bodyRows int) string {
 	s := m.styles
 	tr := m.tr()
@@ -197,7 +197,7 @@ func maxSeriesVal(xs []float64, floor float64) float64 {
 	return m
 }
 
-// renderDetails renders the Detalles tab for the current selection.
+// renderDetails renders the Details tab for the current selection.
 func (m Model) renderDetails() string {
 	if m.itemCount() == 0 {
 		return m.styles.Muted.Render(m.tr().NoSelection)

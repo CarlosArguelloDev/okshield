@@ -99,12 +99,9 @@ func (m Model) renderSidebar(w, h int) string {
 	b.WriteByte('\n')
 	b.WriteString(m.sectionDivider("Host", innerW) + "\n")
 	fmt.Fprintf(&b, "  %s %s\n", s.Muted.Render("host"), s.Text.Render(truncate(m.hostname, max(4, innerW-9))))
-	fmt.Fprintf(&b, "  %s %s  %s %s\n",
+	fmt.Fprintf(&b, "  %s %s  %s %s\n\n",
 		s.Muted.Render("dkr"), m.connGlyph(m.docker),
 		s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)),
-	)
-	fmt.Fprintf(&b, "  %s %s\n\n",
-		s.Muted.Render("lang"), s.StatusBadge(HealthInfo, " "+m.lang.Code()+" "),
 	)
 
 	controls := [][2]string{
@@ -113,7 +110,6 @@ func (m Model) renderSidebar(w, h int) string {
 		{"←/→", tr.CtrlTabs},
 		{"tab", tr.CtrlFocus},
 		{"?", tr.CtrlWhatsup},
-		{"i", tr.CtrlLang + " (" + m.lang.Code() + ")"},
 		{"/", tr.CtrlCommand},
 		{"q", tr.CtrlQuit},
 	}
@@ -466,14 +462,10 @@ func (m Model) renderHelp() string {
 		if m.focus == FocusCommand && m.input.Value() != "" && m.input.Value() != "/" && !matchSet[c.Usage] {
 			usageStyle = s.Muted
 		}
-		summary := c.Summary
-		if m.lang == LangEN && c.SummaryEN != "" {
-			summary = c.SummaryEN
-		}
 		fmt.Fprintf(&b, "  %s  %s  %s\n",
 			usageStyle.Render(fmt.Sprintf("%-22s", c.Usage)),
 			s.Warn.Render(fmt.Sprintf("%-7s", key)),
-			s.Text.Render(summary))
+			s.Text.Render(c.Summary))
 	}
 	b.WriteString("\n")
 	if m.focus == FocusCommand {

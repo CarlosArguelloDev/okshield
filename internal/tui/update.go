@@ -53,7 +53,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pulse = msg.report
 		m.hasPulse = true
-		m.status = fmt.Sprintf("/whatsup listo · %d ok · %d warn · %d err",
+		m.status = fmt.Sprintf("/whatsup ready · %d ok · %d warn · %d err",
 			msg.report.Running, msg.report.Degraded, msg.report.Failed)
 		return m, nil
 
@@ -109,8 +109,6 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.input.Focus()
 	case "?":
 		return m.dispatch(Command{Kind: CmdWhatsup, Name: "whatsup"})
-	case "i":
-		return m.dispatch(Command{Kind: CmdLang, Name: "lang"})
 	case "m", " ":
 		if m.tab == TabMetrics {
 			m.metricKind = (m.metricKind + 1) % metricKindCount
@@ -217,7 +215,7 @@ func (m Model) applyResources(msg resourcesMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	if first {
-		m.status = fmt.Sprintf("docker conectado · %d contenedores", len(m.containers))
+		m.status = fmt.Sprintf("docker connected · %d containers", len(m.containers))
 		cmd = tea.Batch(m.detailCmd(), m.metricsCmd(), runPulse(m.ctx, m.api, m.containers))
 	}
 	return m, tea.Batch(cmd, scheduleRefresh())
@@ -228,27 +226,13 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 	switch c.Kind {
 	case CmdWhatsup:
 		m.tab = TabSummary
-		m.status = "ejecutando resumen determinista (/whatsup)…"
+		m.status = "running deterministic summary (/whatsup)…"
 		return m, runPulse(m.ctx, m.api, m.containers)
 	case CmdContainers, CmdNetworks, CmdVolumes:
 		m.view = View(c.Kind - CmdContainers)
 		m.cursor = 0
-		m.status = "vista: " + m.view.String()
+		m.status = "view: " + m.view.String()
 		return m, m.detailCmd()
-	case CmdLang:
-		if len(c.Args) > 0 {
-			if l, ok := ParseLang(c.Args[0]); ok {
-				m.lang = l
-			}
-		} else {
-			if m.lang == LangES {
-				m.lang = LangEN
-			} else {
-				m.lang = LangES
-			}
-		}
-		m.input.Placeholder = m.tr().HelpPlaceholder
-		m.status = "lang: " + m.lang.Code()
 	case CmdHelp:
 		m.showHelp = true
 	case CmdQuit:
@@ -257,7 +241,7 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 		if c.Raw == "" || c.Raw == "/" {
 			return m, nil
 		}
-		m.status = fmt.Sprintf("comando desconocido: %q (usa /help)", c.Raw)
+		m.status = fmt.Sprintf("unknown command: %q (use /help)", c.Raw)
 	}
 	return m, nil
 }

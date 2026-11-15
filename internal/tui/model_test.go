@@ -75,7 +75,7 @@ func TestCommandBarDispatch(t *testing.T) {
 	if m.focus != FocusCommand {
 		t.Fatalf("focus = %v, want FocusCommand", m.focus)
 	}
-	if !strings.Contains(m.View(), "Comandos Disponibles") || !strings.Contains(m.View(), "Descripción y Detalles") {
+	if !strings.Contains(m.View(), "Available Commands") || !strings.Contains(m.View(), "Description & Details") {
 		t.Errorf("pressing / should open command help modal with available commands and descriptions")
 	}
 	m = key(m, "volumes")
@@ -200,7 +200,7 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	m, _ = model.Update(pmsg)
 	model = m.(Model)
 	// Row 0 is "General" (all containers): summary must show both "api" and "worker".
-	if !strings.Contains(model.View(), "Pulso Determinista") || !strings.Contains(model.View(), "General") {
+	if !strings.Contains(model.View(), "Deterministic Pulse") || !strings.Contains(model.View(), "General") {
 		t.Errorf("summary view missing pulse header or General option")
 	}
 
@@ -224,12 +224,12 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	})
 	model = m.(Model)
 	metricsView := model.View()
-	for _, want := range []string{"CPU Usage", "Memory Usage", "Red RX/TX", "Disco I/O", "128.0MB"} {
+	for _, want := range []string{"CPU Usage", "Memory Usage", "Net RX/TX", "Disk I/O", "128.0MB"} {
 		if !strings.Contains(metricsView, want) {
 			t.Errorf("container metrics view missing %q", want)
 		}
 	}
-	model = key(model, "m") // switch active chart metric to Memoria %
+	model = key(model, "m") // switch active chart metric to Memory %
 	if model.metricKind != MetricMem {
 		t.Errorf("metricKind = %v, want MetricMem", model.metricKind)
 	}
@@ -252,24 +252,5 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	view = model.View()
 	if !strings.Contains(view, "/var/lib/docker/volumes/apidata/_data") {
 		t.Errorf("volume details view missing mountpoint")
-	}
-}
-
-func TestLanguageSwitching(t *testing.T) {
-	m := sized(t)
-	if m.lang != LangES || !strings.Contains(m.View(), "Resumen") {
-		t.Fatalf("expected default Spanish UI, got lang=%v", m.lang)
-	}
-	// Toggle to English with 'i' shortcut.
-	m = key(m, "i")
-	if m.lang != LangEN || !strings.Contains(m.View(), "Summary") || !strings.Contains(m.View(), "Metrics") {
-		t.Errorf("expected English UI after pressing 'i', got lang=%v", m.lang)
-	}
-	// Switch back to Spanish via '/lang es'.
-	m = key(m, "/")
-	m = key(m, "lang es")
-	m = key(m, "enter")
-	if m.lang != LangES || !strings.Contains(m.View(), "Resumen") {
-		t.Errorf("expected Spanish UI after '/lang es', got lang=%v", m.lang)
 	}
 }

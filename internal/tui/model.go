@@ -38,7 +38,7 @@ const (
 	tabCount
 )
 
-var tabNames = [...]string{"Resumen", "Métricas", "Detalles", "Logs"}
+var tabNames = [...]string{"Summary", "Metrics", "Details", "Logs"}
 
 func (t Tab) String() string { return tabNames[t] }
 
@@ -76,8 +76,6 @@ type Options struct {
 	Ctx context.Context
 	// Docker is the Engine API client (nil disables Docker features).
 	Docker DockerAPI
-	// Lang sets the initial display language (LangES by default).
-	Lang Lang
 }
 
 // Model is the root Bubble Tea model of OkShield.
@@ -97,7 +95,6 @@ type Model struct {
 	tab        Tab
 	focus      Focus
 	cursor     int
-	lang       Lang
 	metricKind MetricKind
 	mainScroll int
 	procScroll int
@@ -130,7 +127,7 @@ func New(opts Options) Model {
 	}
 	ti := textinput.New()
 	ti.Prompt = "> "
-	ti.Placeholder = "escribe /help para ver comandos"
+	ti.Placeholder = "type /help to see commands"
 	ti.CharLimit = 128
 
 	host, err := os.Hostname()
@@ -158,12 +155,11 @@ func New(opts Options) Model {
 		ctx:      opts.Ctx,
 		api:      opts.Docker,
 		hostname: host,
-		lang:     opts.Lang,
 		history:  make(map[string]*MetricSeries),
 		cpuBar:   cpuBar,
 		memBar:   memBar,
 		input:    ti,
-		status:   "conectando con docker…",
+		status:   "connecting to docker…",
 	}
 }
 

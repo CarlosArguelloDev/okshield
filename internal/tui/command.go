@@ -11,7 +11,6 @@ const (
 	CmdContainers
 	CmdNetworks
 	CmdVolumes
-	CmdLang
 	CmdHelp
 	CmdQuit
 )
@@ -26,23 +25,21 @@ type Command struct {
 
 // commandSpec describes a command for parsing and help rendering.
 type commandSpec struct {
-	Kind      CommandKind
-	Names     []string // first is canonical, the rest are aliases
-	Usage     string
-	Summary   string
-	SummaryEN string
-	Key       string
+	Kind    CommandKind
+	Names   []string // first is canonical, the rest are aliases
+	Usage   string
+	Summary string
+	Key     string
 }
 
 // commandTable is the single source of truth for available commands.
 var commandTable = []commandSpec{
-	{CmdWhatsup, []string{"whatsup", "pulse"}, "/whatsup", "Resumen determinista de lo que ocurre", "Deterministic summary of container health", "?"},
-	{CmdContainers, []string{"containers", "c"}, "/containers", "Vista de contenedores", "Containers view", "1"},
-	{CmdNetworks, []string{"networks", "n"}, "/networks", "Vista de redes", "Networks view", "2"},
-	{CmdVolumes, []string{"volumes", "v"}, "/volumes", "Vista de volúmenes", "Volumes view", "3"},
-	{CmdLang, []string{"lang", "language", "idioma"}, "/lang [es|en]", "Cambia el idioma entre Español e Inglés", "Switch language between Spanish and English", "i"},
-	{CmdHelp, []string{"help", "h"}, "/help", "Muestra esta ayuda", "Show this help overlay", ""},
-	{CmdQuit, []string{"quit", "q", "exit"}, "/quit", "Salir de OkShield", "Exit OkShield", "ctrl+c"},
+	{CmdWhatsup, []string{"whatsup", "pulse"}, "/whatsup", "Deterministic summary of container health", "?"},
+	{CmdContainers, []string{"containers", "c"}, "/containers", "Containers view", "1"},
+	{CmdNetworks, []string{"networks", "n"}, "/networks", "Networks view", "2"},
+	{CmdVolumes, []string{"volumes", "v"}, "/volumes", "Volumes view", "3"},
+	{CmdHelp, []string{"help", "h"}, "/help", "Show this help overlay", ""},
+	{CmdQuit, []string{"quit", "q", "exit"}, "/quit", "Exit OkShield", "ctrl+c"},
 }
 
 // ParseCommand parses a command bar input such as "/diagnose api". The

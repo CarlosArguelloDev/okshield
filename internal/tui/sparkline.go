@@ -21,7 +21,7 @@ const (
 	metricKindCount
 )
 
-var metricNames = [...]string{"CPU %", "Memoria %", "Red RX/TX", "Disco I/O"}
+var metricNames = [...]string{"CPU %", "Memory %", "Net RX/TX", "Disk I/O"}
 
 func (k MetricKind) String() string { return metricNames[k] }
 
