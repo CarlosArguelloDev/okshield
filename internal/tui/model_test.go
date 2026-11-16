@@ -11,6 +11,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
+	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 )
 
 func sized(t *testing.T) Model {
@@ -344,5 +345,111 @@ func TestMouseInteraction(t *testing.T) {
 	model = clickZone("action-whatsup")
 	if model.tab != TabSummary {
 		t.Errorf("after clicking action-whatsup: tab = %v, want TabSummary", model.tab)
+	}
+}
+
+func TestCopyToClipboardZones(t *testing.T) {
+	if got := formatOSC52("hello"); got != "\x1b]52;c;aGVsbG8=\x07" {
+		t.Fatalf("formatOSC52 = %q, want %q", got, "\x1b]52;c;aGVsbG8=\x07")
+	}
+
+	fd := fakeDocker{
+		containers: []docker.Container{
+			{
+				ID:     "11111111111122222222",
+				Name:   "api",
+				Image:  "api:v1",
+				State:  "running",
+				Status: "Up 10 minutes",
+				Networks: []docker.NetAttachment{
+					{Network: "bridge", IP: "172.17.0.2"},
+				},
+				Mounts: []docker.Mount{
+					{Type: "volume", Name: "apidata", Destination: "/data", RW: true},
+				},
+			},
+		},
+	}
+
+	m, _ := New(Options{Docker: fd}).Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	model := m.(Model)
+	res := fetchResources(context.Background(), fd)()
+	m, _ = model.Update(res)
+	model = m.(Model)
+	model = key(model, "j") // select "api"
+	model.logs = []string{"2026-11-16T00:00:00Z INFO ready", "2026-11-16T00:00:01Z ERROR failed"}
+	model.clusters = []summarizer.LogCluster{
+		{Severity: summarizer.SevError, Template: "failed", Count: 1, Sample: model.logs[1]},
+	}
+
+	waitZone := func(id string) *zone.ZoneInfo {
+		t.Helper()
+		_ = model.View()
+		for deadline := time.Now().Add(300 * time.Millisecond); time.Now().Before(deadline); {
+			if z := zone.Get(id); !z.IsZero() {
+				return z
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+		t.Fatalf("zone %q was not registered", id)
+		return nil
+	}
+
+	clickAndRunCmd := func(id string) tea.Msg {
+		z := waitZone(id)
+		out, cmd := model.Update(tea.MouseMsg{
+			X:      z.StartX,
+			Y:      z.StartY,
+			Action: tea.MouseActionPress,
+			Button: tea.MouseButtonLeft,
+		})
+		model = out.(Model)
+		if cmd == nil {
+			t.Fatalf("clicking %q returned nil cmd", id)
+		}
+		return cmd()
+	}
+
+	// 1. Metadata copy icon ("copy-meta-m-name").
+	msg := clickAndRunCmd("copy-meta-m-name")
+	copied, ok := msg.(clipboardCopiedMsg)
+	if !ok || copied.label != "api" {
+		t.Fatalf("unexpected msg = %#v", msg)
+	}
+	out, _ := model.Update(copied)
+	model = out.(Model)
+	if !strings.Contains(model.toast, "✓ Copied: api") {
+		t.Errorf("toast = %q, want '✓ Copied: api'", model.toast)
+	}
+	if !strings.Contains(model.View(), "✓ Copied: api") {
+		t.Errorf("View() footer missing toast")
+	}
+
+	// 2. Details tab copy icon ("copy-meta-d-image").
+	model = key(model, "right")
+	model = key(model, "right") // TabDetails
+	msg = clickAndRunCmd("copy-meta-d-image")
+	if copied, ok := msg.(clipboardCopiedMsg); !ok || copied.label != "api:v1" {
+		t.Errorf("unexpected details copy msg = %#v", msg)
+	}
+
+	// 3. Logs tab action buttons ("copy-logs-dedup" & "copy-logs-raw").
+	model = key(model, "right") // TabLogs
+	msg = clickAndRunCmd("copy-logs-dedup")
+	if copied, ok := msg.(clipboardCopiedMsg); !ok || copied.btnID != "copy-logs-dedup" {
+		t.Errorf("unexpected dedup msg = %#v", msg)
+	}
+	msg = clickAndRunCmd("copy-logs-raw")
+	if copied, ok := msg.(clipboardCopiedMsg); !ok || copied.btnID != "copy-logs-raw" {
+		t.Errorf("unexpected raw msg = %#v", msg)
+	}
+
+	// 4. Toast clear message removes toast and flashBtn.
+	out, _ = model.Update(clipboardCopiedMsg{label: "test", btnID: "copy-logs-raw"})
+	model = out.(Model)
+	out, _ = model.Update(clipboardClearMsg{seq: model.toastSeq})
+	model = out.(Model)
+	if model.toast != "" || model.flashBtn != "" {
+		t.Errorf("expected toast & flashBtn cleared, got toast=%q flashBtn=%q", model.toast, model.flashBtn)
 	}
 }

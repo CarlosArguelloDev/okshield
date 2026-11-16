@@ -124,6 +124,9 @@ type Model struct {
 
 	input    textinput.Model
 	status   string
+	toast    string
+	flashBtn string
+	toastSeq int
 	showHelp bool
 }
 

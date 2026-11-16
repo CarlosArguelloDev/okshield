@@ -210,13 +210,17 @@ func (m Model) renderInspector(w, h int) string {
 	if m.focus == FocusMain {
 		borderColor = ColorFocus
 	}
+	footBadges := []string{tr.Tabs[m.tab], fmt.Sprintf("%d/%d", int(m.tab)+1, int(tabCount))}
+	if m.toast != "" {
+		footBadges = append([]string{m.toast}, footBadges...)
+	}
 	return renderBox(boxSpec{
 		Width:       w,
 		Height:      h,
 		BorderColor: borderColor,
 		Header:      header,
 		Body:        body,
-		FootBadges:  []string{tr.Tabs[m.tab], fmt.Sprintf("%d/%d", int(m.tab)+1, int(tabCount))},
+		FootBadges:  footBadges,
 	})
 }
 
@@ -284,47 +288,54 @@ func (m Model) renderMetadataBox(w, h int) string {
 		}
 		fmt.Fprintf(&b, "%s %s\n", s.Muted.Render(fmt.Sprintf("%-14s", k)), s.Text.Render(v))
 	}
+	rowCopy := func(k, v, copyKey string) {
+		if v == "" || v == "-" {
+			row(k, "-")
+			return
+		}
+		fmt.Fprintf(&b, "%s %s %s\n", s.Muted.Render(fmt.Sprintf("%-14s", k)), s.Text.Render(v), m.copyIcon(copyKey))
+	}
 
 	fields := 0
 	switch m.view {
 	case ViewNetworks:
 		if m.cursor >= 0 && m.cursor < len(m.networks) {
 			n := m.networks[m.cursor]
-			row("NetworkName", n.Name)
+			rowCopy("NetworkName", n.Name, "m-net-name")
 			row("Driver", n.Driver)
 			row("Scope", n.Scope)
 			if len(n.Subnets) > 0 {
-				row("Subnet", n.Subnets[0].CIDR)
+				rowCopy("Subnet", n.Subnets[0].CIDR, "m-subnet")
 			}
 			fields = 4
 		}
 	case ViewVolumes:
 		if m.cursor >= 0 && m.cursor < len(m.volumes) {
 			v := m.volumes[m.cursor]
-			row("VolumeName", v.Name)
+			rowCopy("VolumeName", v.Name, "m-vol-name")
 			row("Driver", v.Driver)
-			row("Mountpoint", v.Mountpoint)
+			rowCopy("Mountpoint", v.Mountpoint, "m-vol-mp")
 			fields = 3
 		}
 	case ViewImages:
 		if m.cursor >= 0 && m.cursor < len(m.images) {
 			img := m.images[m.cursor]
-			row("Image", img.DisplayName())
-			row("ImageID", img.ShortID())
+			rowCopy("Image", img.DisplayName(), "m-img-tag")
+			rowCopy("ImageID", img.ShortID(), "m-img-id")
 			row("Size", humanBytes(uint64(max(0, img.Size))))
 			row("Created", img.Created.Format("2006-01-02 15:04"))
 			fields = 4
 		}
 	default:
 		if c, ok := m.selectedContainer(); ok {
-			row("ContainerName", c.Name)
-			row("Image", c.Image)
+			rowCopy("ContainerName", c.Name, "m-name")
+			rowCopy("Image", c.Image, "m-image")
 			row("State", c.Status)
 			if len(c.Networks) > 0 {
-				row("NetworkIP", c.Networks[0].Network+" "+c.Networks[0].IP)
+				rowCopy("NetworkIP", c.Networks[0].Network+" "+c.Networks[0].IP, "m-ip")
 			}
 			if len(c.Mounts) > 0 {
-				row("Mount", c.Mounts[0].Destination)
+				rowCopy("Mount", c.Mounts[0].Destination, "m-mount")
 			}
 			fields = 5
 		} else if len(m.containers) > 0 {

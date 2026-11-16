@@ -26,6 +26,15 @@ func (k kv) row(key, val string) {
 	fmt.Fprintf(k.b, "%s%s %s\n", k.s.Muted.Render(key), strings.Repeat(" ", pad), k.s.Text.Render(val))
 }
 
+func (k kv) rowCopy(key, val, icon string) {
+	if val == "" || val == "-" {
+		k.row(key, "-")
+		return
+	}
+	pad := max(1, 15-lipgloss.Width(key))
+	fmt.Fprintf(k.b, "%s%s %s %s\n", k.s.Muted.Render(key), strings.Repeat(" ", pad), k.s.Text.Render(val), icon)
+}
+
 func (k kv) section(title string) {
 	k.b.WriteString("\n" + k.s.Title.Render(title) + "\n")
 }
@@ -248,8 +257,9 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 	if h == HealthError {
 		badge = s.StatusBadge(HealthError, GlyphDown)
 	}
-	k.b.WriteString(badge + " " + s.Title.Render(c.Name) + s.Muted.Render("  "+c.ShortID()) + "\n")
-	k.row(tr.FieldImage, c.Image)
+	k.b.WriteString(badge + " " + s.Title.Render(c.Name) + " " + m.copyIcon("d-name") + s.Muted.Render("  "+c.ShortID()) + " " + m.copyIcon("d-id-short") + "\n")
+	k.rowCopy("id", c.ShortID(), m.copyIcon("d-id-full"))
+	k.rowCopy(tr.FieldImage, c.Image, m.copyIcon("d-image"))
 	k.row(tr.FieldState, c.Status)
 
 	d := m.detail
@@ -272,7 +282,11 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 		}
 		k.row(tr.FieldRAMLimit, limitStr(d.MemoryLimit, humanBytes(uint64(d.MemoryLimit)), tr.NoLimit))
 		k.row(tr.FieldCPULimit, limitStr(d.NanoCPUs, fmt.Sprintf("%.2f cpu", float64(d.NanoCPUs)/1e9), tr.NoLimit))
-		k.row("cmd", strings.Join(d.Cmd, " "))
+		if len(d.Cmd) > 0 {
+			k.rowCopy("cmd", strings.Join(d.Cmd, " "), m.copyIcon("d-cmd"))
+		} else {
+			k.row("cmd", "")
+		}
 		k.row("env vars", strconv.Itoa(d.EnvCount))
 	} else if m.detailErr != nil {
 		k.row("inspect", s.Err.Render(m.detailErr.Error()))
@@ -280,23 +294,24 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 
 	if len(c.Ports) > 0 {
 		k.section(tr.SectionPorts)
-		for _, p := range c.Ports {
+		for i, p := range c.Ports {
+			icon := m.copyIcon(fmt.Sprintf("d-port-%d", i))
 			if p.Public != 0 {
-				k.b.WriteString(fmt.Sprintf("  %s:%d → %d/%s\n", orDash(p.IP), p.Public, p.Private, p.Proto))
+				k.b.WriteString(fmt.Sprintf("  %s:%d → %d/%s %s\n", orDash(p.IP), p.Public, p.Private, p.Proto, icon))
 			} else {
-				k.b.WriteString(fmt.Sprintf("  %d/%s (%s)\n", p.Private, p.Proto, tr.Unpublished))
+				k.b.WriteString(fmt.Sprintf("  %d/%s (%s) %s\n", p.Private, p.Proto, tr.Unpublished, icon))
 			}
 		}
 	}
 	if len(c.Networks) > 0 {
 		k.section(tr.SectionNetworks)
-		for _, n := range c.Networks {
-			k.row(n.Network, n.IP)
+		for i, n := range c.Networks {
+			k.rowCopy(n.Network, n.IP, m.copyIcon(fmt.Sprintf("d-ip-%d", i)))
 		}
 	}
 	if len(c.Mounts) > 0 {
 		k.section(tr.SectionMounts)
-		for _, mt := range c.Mounts {
+		for i, mt := range c.Mounts {
 			src := mt.Source
 			if mt.Type == "volume" && mt.Name != "" {
 				src = mt.Name
@@ -305,19 +320,19 @@ func (m Model) containerDetails(k kv, c docker.Container) {
 			if !mt.RW {
 				mode = "ro"
 			}
-			k.b.WriteString(fmt.Sprintf("  [%s] %s → %s (%s)\n", mt.Type, src, mt.Destination, mode))
+			k.b.WriteString(fmt.Sprintf("  [%s] %s → %s (%s) %s\n", mt.Type, src, mt.Destination, mode, m.copyIcon(fmt.Sprintf("d-mount-%d", i))))
 		}
 	}
 }
 
 func (m Model) networkDetails(k kv, n docker.Network) {
 	tr := m.tr()
-	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " NET ") + " " + m.styles.Title.Render(n.Name) + "\n")
+	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " NET ") + " " + m.styles.Title.Render(n.Name) + " " + m.copyIcon("d-net-name") + "\n")
 	k.row("driver", n.Driver)
 	k.row("scope", n.Scope)
 	k.row(tr.FieldInternal, strconv.FormatBool(n.Internal))
-	for _, sn := range n.Subnets {
-		k.row("subnet", sn.CIDR+"  gw "+orDash(sn.Gateway))
+	for i, sn := range n.Subnets {
+		k.rowCopy("subnet", sn.CIDR+"  gw "+orDash(sn.Gateway), m.copyIcon(fmt.Sprintf("d-subnet-%d", i)))
 	}
 	k.section(tr.ConnectedContainers)
 	found := false
@@ -336,10 +351,10 @@ func (m Model) networkDetails(k kv, n docker.Network) {
 
 func (m Model) volumeDetails(k kv, v docker.Volume) {
 	tr := m.tr()
-	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " VOL ") + " " + m.styles.Title.Render(v.Name) + "\n")
+	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " VOL ") + " " + m.styles.Title.Render(v.Name) + " " + m.copyIcon("d-vol-name") + "\n")
 	k.row("driver", v.Driver)
 	k.row("scope", v.Scope)
-	k.row("mountpoint", v.Mountpoint)
+	k.rowCopy("mountpoint", v.Mountpoint, m.copyIcon("d-vol-mp"))
 	k.row(tr.FieldCreated, v.CreatedAt)
 	k.section(tr.UsedBy)
 	found := false
@@ -358,8 +373,8 @@ func (m Model) volumeDetails(k kv, v docker.Volume) {
 
 func (m Model) imageDetails(k kv, img docker.Image) {
 	tr := m.tr()
-	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " IMG ") + " " + m.styles.Title.Render(img.DisplayName()) + "\n")
-	k.row("id", img.ShortID())
+	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " IMG ") + " " + m.styles.Title.Render(img.DisplayName()) + " " + m.copyIcon("d-img-tag") + "\n")
+	k.rowCopy("id", img.ShortID(), m.copyIcon("d-img-id"))
 	k.row("size", humanBytes(uint64(max(0, img.Size))))
 	if !img.Created.IsZero() {
 		k.row(tr.FieldCreated, img.Created.Format("2006-01-02 15:04:05"))

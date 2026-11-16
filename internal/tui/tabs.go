@@ -88,10 +88,20 @@ func (m Model) renderLogs(maxLines int) string {
 		return b.String()
 	}
 
-	fmt.Fprintf(&b, "%s %s %s\n",
+	dedupBtn := s.Key.Render("[ ⧉ Copy Deduplicated ]")
+	if m.flashBtn == "copy-logs-dedup" {
+		dedupBtn = s.StatusBadge(HealthOK, " ✓ Copied Deduplicated ")
+	}
+	rawBtn := s.Key.Render("[ ⧉ Copy All Logs ]")
+	if m.flashBtn == "copy-logs-raw" {
+		rawBtn = s.StatusBadge(HealthOK, " ✓ Copied All Logs ")
+	}
+	fmt.Fprintf(&b, "%s %s %s\n%s  %s\n\n",
 		s.Title.Render(tr.LogsTitle),
 		s.Text.Render(c.Name),
 		s.Muted.Render(fmt.Sprintf(tr.LogsRingCount, len(m.logs), len(m.clusters))),
+		zone.Mark("copy-logs-dedup", dedupBtn),
+		zone.Mark("copy-logs-raw", rawBtn),
 	)
 
 	if len(m.clusters) == 0 {

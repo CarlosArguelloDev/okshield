@@ -2,9 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 )
@@ -74,6 +74,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
+
+	case clipboardCopiedMsg:
+		m.toastSeq++
+		seq := m.toastSeq
+		m.toast = "✓ Copied: " + truncate(msg.label, 32)
+		m.flashBtn = msg.btnID
+		m.status = m.toast
+		return m, tea.Tick(toastDuration, func(time.Time) tea.Msg {
+			return clipboardClearMsg{seq: seq}
+		})
+
+	case clipboardClearMsg:
+		if msg.seq == m.toastSeq {
+			m.toast = ""
+			m.flashBtn = ""
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -371,17 +388,41 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.tab == TabLogs {
+		if zone.Get("copy-logs-dedup").InBounds(msg) && len(m.clusters) > 0 {
+			var b strings.Builder
+			for i, cl := range m.clusters {
+				if i > 0 {
+					b.WriteByte('\n')
+				}
+				fmt.Fprintf(&b, "[%s] x%d: %s", cl.Severity, cl.Count, cl.Template)
+			}
+			m.focus = FocusMain
+			return m, copyToClipboard(b.String(), fmt.Sprintf("%d patterns", len(m.clusters)), "copy-logs-dedup")
+		}
+		if zone.Get("copy-logs-raw").InBounds(msg) && len(m.logs) > 0 {
+			m.focus = FocusMain
+			return m, copyToClipboard(strings.Join(m.logs, "\n"), fmt.Sprintf("%d log lines", len(m.logs)), "copy-logs-raw")
+		}
+	}
+
+	for _, t := range m.metaCopyTargets() {
+		zoneID := "copy-meta-" + t.key
+		if zone.Get(zoneID).InBounds(msg) {
+			return m, copyToClipboard(t.value, t.label, zoneID)
+		}
+	}
+
 	if m.tab == TabSummary || m.tab == TabLogs {
 		for i, cl := range m.visibleClusters() {
-			if zone.Get(fmt.Sprintf("cluster-%d", i)).InBounds(msg) {
+			zoneID := fmt.Sprintf("cluster-%d", i)
+			if zone.Get(zoneID).InBounds(msg) {
 				text := cl.Sample
 				if text == "" {
 					text = cl.Template
 				}
-				_ = clipboard.WriteAll(text)
-				m.status = "copied log pattern: " + truncate(cl.Template, 48)
 				m.focus = FocusMain
-				return m, nil
+				return m, copyToClipboard(text, truncate(cl.Template, 32), zoneID)
 			}
 		}
 	}
