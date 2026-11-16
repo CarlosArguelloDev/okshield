@@ -88,20 +88,19 @@ func (m Model) renderLogs(maxLines int) string {
 		return b.String()
 	}
 
-	dedupBtn := s.Key.Render("[ ⧉ Copy Deduplicated ]")
+	dedupBtn := s.Key.Render("⧉")
 	if m.flashBtn == "copy-logs-dedup" {
-		dedupBtn = s.StatusBadge(HealthOK, " ✓ Copied Deduplicated ")
+		dedupBtn = s.OK.Render("✓")
 	}
-	rawBtn := s.Key.Render("[ ⧉ Copy All Logs ]")
+	rawBtn := s.Key.Render("⧉")
 	if m.flashBtn == "copy-logs-raw" {
-		rawBtn = s.StatusBadge(HealthOK, " ✓ Copied All Logs ")
+		rawBtn = s.OK.Render("✓")
 	}
-	fmt.Fprintf(&b, "%s %s %s\n%s  %s\n\n",
+	fmt.Fprintf(&b, "%s %s %s %s\n",
 		s.Title.Render(tr.LogsTitle),
 		s.Text.Render(c.Name),
 		s.Muted.Render(fmt.Sprintf(tr.LogsRingCount, len(m.logs), len(m.clusters))),
 		zone.Mark("copy-logs-dedup", dedupBtn),
-		zone.Mark("copy-logs-raw", rawBtn),
 	)
 
 	if len(m.clusters) == 0 {
@@ -113,7 +112,7 @@ func (m Model) renderLogs(maxLines int) string {
 		b.WriteString("  " + m.formatCluster(i, m.clusters[i]) + "\n")
 	}
 
-	b.WriteString("\n" + s.Title.Render(tr.LogsRecent) + "\n")
+	b.WriteString("\n" + s.Title.Render(tr.LogsRecent) + " " + zone.Mark("copy-logs-raw", rawBtn) + "\n")
 	for _, line := range m.logs {
 		b.WriteString("  " + s.Muted.Render(line) + "\n")
 	}
