@@ -4,9 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 )
@@ -266,5 +268,81 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	view = model.View()
 	if !strings.Contains(view, "api:v1") || !strings.Contains(view, "64.0MB") {
 		t.Errorf("image details view missing tag or size")
+	}
+}
+
+func TestMouseInteraction(t *testing.T) {
+	fd := fakeDocker{
+		containers: []docker.Container{
+			{ID: "11111111111122222222", Name: "api", Image: "api:v1", State: "running", Status: "Up 10 minutes"},
+			{ID: "33333333333344444444", Name: "worker", Image: "worker:v1", State: "exited", Status: "Exited (1) 1 minute ago"},
+		},
+	}
+
+	m, _ := New(Options{Docker: fd}).Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	model := m.(Model)
+	res := fetchResources(context.Background(), fd)()
+	m, _ = model.Update(res)
+	model = m.(Model)
+
+	waitZone := func(id string) *zone.ZoneInfo {
+		t.Helper()
+		_ = model.View()
+		for deadline := time.Now().Add(300 * time.Millisecond); time.Now().Before(deadline); {
+			if z := zone.Get(id); !z.IsZero() {
+				return z
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+		t.Fatalf("zone %q was not registered", id)
+		return nil
+	}
+
+	clickZone := func(id string) Model {
+		z := waitZone(id)
+		out, _ := model.Update(tea.MouseMsg{
+			X:      z.StartX,
+			Y:      z.StartY,
+			Action: tea.MouseActionPress,
+			Button: tea.MouseButtonLeft,
+		})
+		return out.(Model)
+	}
+
+	// 1. Click Metrics tab (tab-1).
+	model = clickZone("tab-1")
+	if model.tab != TabMetrics {
+		t.Errorf("after clicking tab-1: tab = %v, want TabMetrics", model.tab)
+	}
+
+	// 2. Click a metric selector pill (metric-2 -> Net RX/TX).
+	model = clickZone("metric-2")
+	if model.metricKind != MetricNet {
+		t.Errorf("after clicking metric-2: metricKind = %v, want MetricNet", model.metricKind)
+	}
+
+	// 3. Click container row ("api").
+	model = clickZone("container-11111111111122222222")
+	if model.cursor != 1 {
+		t.Errorf("after clicking container row: cursor = %d, want 1", model.cursor)
+	}
+
+	// 4. Mouse wheel down on Browser pane selects next item ("worker").
+	bz := waitZone(zonePaneBrowser)
+	out, _ := model.Update(tea.MouseMsg{
+		X:      bz.StartX + 1,
+		Y:      bz.StartY + 1,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonWheelDown,
+	})
+	model = out.(Model)
+	if model.cursor != 2 {
+		t.Errorf("after wheel down in browser: cursor = %d, want 2", model.cursor)
+	}
+
+	// 5. Click action-whatsup switches back to TabSummary.
+	model = clickZone("action-whatsup")
+	if model.tab != TabSummary {
+		t.Errorf("after clicking action-whatsup: tab = %v, want TabSummary", model.tab)
 	}
 }

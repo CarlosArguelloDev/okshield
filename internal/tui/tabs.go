@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 )
 
@@ -39,6 +41,7 @@ func (m Model) renderPulse(maxLines int) string {
 		containers = filtered
 	}
 
+	clusterIdx := 0
 	for idx, cp := range containers {
 		if idx > 0 {
 			b.WriteByte('\n')
@@ -67,7 +70,8 @@ func (m Model) renderPulse(maxLines int) string {
 			if cl.Severity == summarizer.SevInfo && len(cp.Anomalies) == 0 && cp.ErrorCount > 0 {
 				continue
 			}
-			b.WriteString("   " + m.formatCluster(cl) + "\n")
+			b.WriteString("   " + m.formatCluster(clusterIdx, cl) + "\n")
+			clusterIdx++
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -96,7 +100,7 @@ func (m Model) renderLogs(maxLines int) string {
 	}
 
 	for i := 0; i < len(m.clusters); i++ {
-		b.WriteString("  " + m.formatCluster(m.clusters[i]) + "\n")
+		b.WriteString("  " + m.formatCluster(i, m.clusters[i]) + "\n")
 	}
 
 	b.WriteString("\n" + s.Title.Render(tr.LogsRecent) + "\n")
@@ -106,7 +110,7 @@ func (m Model) renderLogs(maxLines int) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (m Model) formatCluster(cl summarizer.LogCluster) string {
+func (m Model) formatCluster(idx int, cl summarizer.LogCluster) string {
 	s := m.styles
 	var badge string
 	var count string
@@ -121,5 +125,33 @@ func (m Model) formatCluster(cl summarizer.LogCluster) string {
 		badge = s.StatusBadge(HealthInfo, GlyphInfo)
 		count = s.OK.Render(fmt.Sprintf("x%d:", cl.Count))
 	}
-	return badge + " " + count + " " + s.Text.Render(cl.Template)
+	return zone.Mark(fmt.Sprintf("cluster-%d", idx), badge) + " " + count + " " + s.Text.Render(cl.Template)
+}
+
+func (m Model) visibleClusters() []summarizer.LogCluster {
+	if m.tab == TabLogs {
+		return m.clusters
+	}
+	if !m.hasPulse {
+		return nil
+	}
+	containers := m.pulse.Containers
+	if sel, ok := m.selectedContainer(); ok {
+		for _, cp := range m.pulse.Containers {
+			if cp.Name == sel.Name {
+				containers = []summarizer.ContainerPulse{cp}
+				break
+			}
+		}
+	}
+	var out []summarizer.LogCluster
+	for _, cp := range containers {
+		for _, cl := range cp.TopClusters {
+			if cl.Severity == summarizer.SevInfo && len(cp.Anomalies) == 0 && cp.ErrorCount > 0 {
+				continue
+			}
+			out = append(out, cl)
+		}
+	}
+	return out
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
@@ -45,10 +46,11 @@ func main() {
 		return
 	}
 
+	zone.NewGlobal()
 	p := tea.NewProgram(tui.New(tui.Options{
 		Ctx:    ctx,
 		Docker: cli,
-	}), tea.WithAltScreen())
+	}), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "okshield:", err)
 		os.Exit(1)

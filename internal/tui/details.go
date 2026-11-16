@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 )
@@ -69,11 +70,13 @@ func (m Model) renderMetrics(bodyRows int) string {
 	var pills []string
 	for k := MetricKind(0); k < metricKindCount; k++ {
 		label := tr.Metrics[k]
+		var pill string
 		if k == m.metricKind {
-			pills = append(pills, s.StatusBadge(HealthInfo, " ▸ "+label+" "))
+			pill = s.StatusBadge(HealthInfo, " ▸ "+label+" ")
 		} else {
-			pills = append(pills, s.Muted.Render("["+label+"]"))
+			pill = s.Muted.Render("[" + label + "]")
 		}
+		pills = append(pills, zone.Mark(fmt.Sprintf("metric-%d", k), pill))
 	}
 	b.WriteString(strings.Join(pills, "  ") + "\n\n")
 

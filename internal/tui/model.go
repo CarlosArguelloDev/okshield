@@ -9,10 +9,15 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/CarlosArguelloDev/okshield/internal/docker"
 	"github.com/CarlosArguelloDev/okshield/internal/summarizer"
 )
+
+func init() {
+	zone.NewGlobal()
+}
 
 // View is the infrastructure resource shown in the sidebar.
 type View int

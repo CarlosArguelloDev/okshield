@@ -5,11 +5,18 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 const (
 	minSidebarW = 22
 	bottomH     = 8
+
+	zonePaneSidebar   = "pane-sidebar"
+	zonePaneBrowser   = "pane-browser"
+	zonePaneInspector = "pane-inspector"
+	zonePaneProcesses = "pane-processes"
+	zonePaneMetadata  = "pane-metadata"
 )
 
 // View renders the whole screen in a Superfile-inspired multi-pane layout:
@@ -20,7 +27,7 @@ func (m Model) View() string {
 		return m.tr().Starting
 	}
 	if m.focus == FocusCommand || m.showHelp {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderHelp())
+		return zone.Scan(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.renderHelp()))
 	}
 
 	botH := bottomH
@@ -29,10 +36,10 @@ func (m Model) View() string {
 	}
 	topH := max(6, m.height-botH)
 
-	return lipgloss.JoinVertical(lipgloss.Left,
+	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left,
 		m.renderTopRow(topH),
 		m.renderBottomRow(botH),
-	)
+	))
 }
 
 func (m Model) topColumnWidths() (sideW, browserW, inspectorW int) {
@@ -52,9 +59,9 @@ func (m Model) renderTopRow(h int) string {
 	sideW, browserW, inspectorW := m.topColumnWidths()
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		m.renderSidebar(sideW, h),
-		m.renderBrowser(browserW, h),
-		m.renderInspector(inspectorW, h),
+		zone.Mark(zonePaneSidebar, m.renderSidebar(sideW, h)),
+		zone.Mark(zonePaneBrowser, m.renderBrowser(browserW, h)),
+		zone.Mark(zonePaneInspector, m.renderInspector(inspectorW, h)),
 	)
 }
 
@@ -63,8 +70,8 @@ func (m Model) renderBottomRow(h int) string {
 	w2 := m.width - w1
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		m.renderProcessesBox(w1, h),
-		m.renderMetadataBox(w2, h),
+		zone.Mark(zonePaneProcesses, m.renderProcessesBox(w1, h)),
+		zone.Mark(zonePaneMetadata, m.renderMetadataBox(w2, h)),
 	)
 }
 
@@ -91,7 +98,8 @@ func (m Model) renderSidebar(w, h int) string {
 			cursor = s.Title.Render("> ")
 			style = s.Selected
 		}
-		fmt.Fprintf(&b, "%s%s %s\n", cursor, icons[i], style.Render(tr.Views[i]))
+		item := fmt.Sprintf("%s%s %s", cursor, icons[i], style.Render(tr.Views[i]))
+		b.WriteString(zone.Mark(fmt.Sprintf("view-%d", i), item) + "\n")
 	}
 
 	b.WriteByte('\n')
@@ -100,20 +108,26 @@ func (m Model) renderSidebar(w, h int) string {
 	fmt.Fprintf(&b, "  %s %s\n", s.Muted.Render("dkr"), m.connGlyph(m.docker))
 	fmt.Fprintf(&b, "  %s %s\n\n", s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)))
 
-	controls := [][2]string{
-		{"↑/↓", tr.CtrlScroll},
-		{"1-4", tr.CtrlViews},
-		{"←/→", tr.CtrlTabs},
-		{"tab", tr.CtrlFocus},
-		{"?", tr.CtrlWhatsup},
-		{"/", tr.CtrlCommand},
-		{"q", tr.CtrlQuit},
+	controls := []struct {
+		key, label, zoneID string
+	}{
+		{"↑/↓", tr.CtrlScroll, ""},
+		{"1-4", tr.CtrlViews, ""},
+		{"←/→", tr.CtrlTabs, ""},
+		{"tab", tr.CtrlFocus, ""},
+		{"?", tr.CtrlWhatsup, "action-whatsup"},
+		{"/", tr.CtrlCommand, "action-command"},
+		{"q", tr.CtrlQuit, "action-quit"},
 	}
 	for i, kv := range controls {
-		fmt.Fprintf(&b, "  %s %s",
-			s.Key.Render(fmt.Sprintf("%-7s", kv[0])),
-			s.Muted.Render(kv[1]),
+		entry := fmt.Sprintf("  %s %s",
+			s.Key.Render(fmt.Sprintf("%-7s", kv.key)),
+			s.Muted.Render(kv.label),
 		)
+		if kv.zoneID != "" {
+			entry = zone.Mark(kv.zoneID, entry)
+		}
+		b.WriteString(entry)
 		if i < len(controls)-1 {
 			b.WriteByte('\n')
 		}
@@ -174,11 +188,13 @@ func (m Model) renderInspector(w, h int) string {
 	tabs := make([]string, 0, tabCount)
 	for t := Tab(0); t < tabCount; t++ {
 		label := tr.Tabs[t]
+		var tabStr string
 		if t == m.tab {
-			tabs = append(tabs, s.Title.Render("▸ "+label))
+			tabStr = s.Title.Render("▸ " + label)
 		} else {
-			tabs = append(tabs, s.Muted.Render(label))
+			tabStr = s.Muted.Render(label)
 		}
+		tabs = append(tabs, zone.Mark(fmt.Sprintf("tab-%d", t), tabStr))
 	}
 	header := strings.Join(tabs, s.Muted.Render(" │ "))
 
@@ -391,11 +407,18 @@ func (m Model) renderList(w, rows int) string {
 		glyph, label := m.listRow(i)
 		glyphW := lipgloss.Width(glyph)
 		label = truncate(label, max(1, w-glyphW-4))
+		var rowStr string
 		if i == m.cursor {
-			b.WriteString(s.Title.Render("> ") + glyph + " " + s.Selected.Render(label))
+			rowStr = s.Title.Render("> ") + glyph + " " + s.Selected.Render(label)
 		} else {
-			b.WriteString("  " + glyph + " " + s.Text.Render(label))
+			rowStr = "  " + glyph + " " + s.Text.Render(label)
 		}
+		if m.view == ViewContainers && i > 0 {
+			rowStr = zone.Mark(fmt.Sprintf("container-%s", m.containers[i-1].ID), rowStr)
+		} else {
+			rowStr = zone.Mark(fmt.Sprintf("row-%d", i), rowStr)
+		}
+		b.WriteString(rowStr)
 		if i < end-1 {
 			b.WriteByte('\n')
 		}
@@ -463,11 +486,13 @@ func (m Model) renderHelp() string {
 	var avail []string
 	for _, c := range commandTable {
 		cmdName := firstField(c.Usage)
+		var item string
 		if m.focus == FocusCommand && m.input.Value() != "" && m.input.Value() != "/" && matchSet[c.Usage] {
-			avail = append(avail, s.StatusBadge(HealthInfo, " "+cmdName+" "))
+			item = s.StatusBadge(HealthInfo, " "+cmdName+" ")
 		} else {
-			avail = append(avail, s.Key.Render(cmdName))
+			item = s.Key.Render(cmdName)
 		}
+		avail = append(avail, zone.Mark("cmd-"+c.Names[0], item))
 	}
 	b.WriteString("  " + strings.Join(avail, s.Muted.Render("  ·  ")) + "\n\n")
 

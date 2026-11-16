@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // Update handles messages. It never blocks: any I/O is delegated to tea.Cmd.
@@ -69,6 +71,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateCommandBar(msg)
 		}
 		return m.updateNavigation(msg)
+
+	case tea.MouseMsg:
+		return m.updateMouse(msg)
 	}
 	return m, nil
 }
@@ -163,20 +168,8 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case FocusMain:
 			if m.tab == TabMetrics {
 				m.metricKind = (m.metricKind + 1) % metricKindCount
-			} else {
-				botH := bottomH
-				if m.height < 20 {
-					botH = max(5, m.height/3)
-				}
-				bodyRows := max(1, max(6, m.height-botH)-4)
-				_, _, inspectorW := m.topColumnWidths()
-				body := m.inspectorBody(bodyRows)
-				if m.tab != TabMetrics {
-					body = wrapBody(body, max(1, inspectorW-4))
-				}
-				if maxOff := max(0, countLines(body)-bodyRows); m.mainScroll < maxOff {
-					m.mainScroll++
-				}
+			} else if maxOff := m.maxMainScroll(); m.mainScroll < maxOff {
+				m.mainScroll++
 			}
 		case FocusProcesses:
 			if m.procScroll < max(0, len(m.containers)+2) {
@@ -273,4 +266,191 @@ func countLines(s string) int {
 		}
 	}
 	return n
+}
+
+func (m Model) maxMainScroll() int {
+	botH := bottomH
+	if m.height < 20 {
+		botH = max(5, m.height/3)
+	}
+	bodyRows := max(1, max(6, m.height-botH)-4)
+	_, _, inspectorW := m.topColumnWidths()
+	body := m.inspectorBody(bodyRows)
+	if m.tab != TabMetrics {
+		body = wrapBody(body, max(1, inspectorW-4))
+	}
+	return max(0, countLines(body)-bodyRows)
+}
+
+func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+		return m.handleMouseWheel(msg)
+	}
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return m, nil
+	}
+
+	if m.showHelp || m.focus == FocusCommand {
+		for _, c := range commandTable {
+			if zone.Get("cmd-" + c.Names[0]).InBounds(msg) {
+				m.showHelp = false
+				if m.focus == FocusCommand {
+					m.input.Reset()
+					m.input.Blur()
+					m.focus = FocusSidebar
+				}
+				return m.dispatch(Command{Kind: c.Kind, Name: c.Names[0]})
+			}
+		}
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+		m.input.Reset()
+		m.input.Blur()
+		m.focus = FocusSidebar
+		return m, nil
+	}
+
+	for i := View(0); i <= ViewImages; i++ {
+		if zone.Get(fmt.Sprintf("view-%d", i)).InBounds(msg) {
+			return m.dispatch(Command{Kind: CmdContainers + CommandKind(i)})
+		}
+	}
+
+	switch {
+	case zone.Get("action-whatsup").InBounds(msg):
+		return m.dispatch(Command{Kind: CmdWhatsup, Name: "whatsup"})
+	case zone.Get("action-command").InBounds(msg):
+		m.focus = FocusCommand
+		m.input.SetValue("/")
+		m.input.CursorEnd()
+		return m, m.input.Focus()
+	case zone.Get("action-quit").InBounds(msg):
+		return m, tea.Quit
+	}
+
+	for t := Tab(0); t < tabCount; t++ {
+		if zone.Get(fmt.Sprintf("tab-%d", t)).InBounds(msg) {
+			m.tab = t
+			m.mainScroll = 0
+			m.focus = FocusMain
+			return m, nil
+		}
+	}
+
+	if m.tab == TabMetrics {
+		for k := MetricKind(0); k < metricKindCount; k++ {
+			if zone.Get(fmt.Sprintf("metric-%d", k)).InBounds(msg) {
+				m.metricKind = k
+				m.focus = FocusMain
+				return m, nil
+			}
+		}
+	}
+
+	if m.view == ViewContainers {
+		for i, c := range m.containers {
+			if zone.Get(fmt.Sprintf("container-%s", c.ID)).InBounds(msg) {
+				m.cursor = i + 1
+				m.focus = FocusSidebar
+				m.mainScroll = 0
+				m.metaScroll = 0
+				return m, tea.Batch(m.detailCmd(), m.metricsCmd())
+			}
+		}
+	}
+
+	for i := 0; i < m.itemCount(); i++ {
+		if zone.Get(fmt.Sprintf("row-%d", i)).InBounds(msg) {
+			m.cursor = i
+			m.focus = FocusSidebar
+			m.mainScroll = 0
+			m.metaScroll = 0
+			return m, tea.Batch(m.detailCmd(), m.metricsCmd())
+		}
+	}
+
+	if m.tab == TabSummary || m.tab == TabLogs {
+		for i, cl := range m.visibleClusters() {
+			if zone.Get(fmt.Sprintf("cluster-%d", i)).InBounds(msg) {
+				text := cl.Sample
+				if text == "" {
+					text = cl.Template
+				}
+				_ = clipboard.WriteAll(text)
+				m.status = "copied log pattern: " + truncate(cl.Template, 48)
+				m.focus = FocusMain
+				return m, nil
+			}
+		}
+	}
+
+	switch {
+	case zone.Get(zonePaneSidebar).InBounds(msg), zone.Get(zonePaneBrowser).InBounds(msg):
+		m.focus = FocusSidebar
+	case zone.Get(zonePaneInspector).InBounds(msg):
+		m.focus = FocusMain
+	case zone.Get(zonePaneProcesses).InBounds(msg):
+		m.focus = FocusProcesses
+	case zone.Get(zonePaneMetadata).InBounds(msg):
+		m.focus = FocusMetadata
+	}
+	return m, nil
+}
+
+func (m Model) handleMouseWheel(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	up := msg.Button == tea.MouseButtonWheelUp
+
+	if zone.Get(zonePaneBrowser).InBounds(msg) || zone.Get(zonePaneSidebar).InBounds(msg) {
+		if up && m.cursor > 0 {
+			m.cursor--
+			m.mainScroll = 0
+			m.metaScroll = 0
+			return m, tea.Batch(m.detailCmd(), m.metricsCmd())
+		}
+		if !up && m.cursor < m.itemCount()-1 {
+			m.cursor++
+			m.mainScroll = 0
+			m.metaScroll = 0
+			return m, tea.Batch(m.detailCmd(), m.metricsCmd())
+		}
+		return m, nil
+	}
+
+	if zone.Get(zonePaneProcesses).InBounds(msg) {
+		if up && m.procScroll > 0 {
+			m.procScroll--
+		} else if !up && m.procScroll < max(0, len(m.containers)+2) {
+			m.procScroll++
+		}
+		return m, nil
+	}
+
+	if zone.Get(zonePaneMetadata).InBounds(msg) {
+		if up && m.metaScroll > 0 {
+			m.metaScroll--
+		} else if !up && m.metaScroll < 5 {
+			m.metaScroll++
+		}
+		return m, nil
+	}
+
+	if m.tab == TabMetrics {
+		if up {
+			m.metricKind = (m.metricKind + metricKindCount - 1) % metricKindCount
+		} else {
+			m.metricKind = (m.metricKind + 1) % metricKindCount
+		}
+		return m, nil
+	}
+
+	if up {
+		if m.mainScroll > 0 {
+			m.mainScroll--
+		}
+	} else if maxOff := m.maxMainScroll(); m.mainScroll < maxOff {
+		m.mainScroll++
+	}
+	return m, nil
 }
