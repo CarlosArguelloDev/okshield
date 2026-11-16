@@ -46,6 +46,7 @@ func TestKeybindingsSwitchViewsAndTabs(t *testing.T) {
 	}{
 		{[]string{"2"}, ViewNetworks, TabSummary, FocusSidebar},
 		{[]string{"3"}, ViewVolumes, TabSummary, FocusSidebar},
+		{[]string{"4"}, ViewImages, TabSummary, FocusSidebar},
 		{[]string{"3", "1"}, ViewContainers, TabSummary, FocusSidebar},
 		{[]string{"right"}, ViewContainers, TabMetrics, FocusSidebar},
 		{[]string{"right", "right"}, ViewContainers, TabDetails, FocusSidebar},
@@ -133,6 +134,7 @@ type fakeDocker struct {
 	containers []docker.Container
 	networks   []docker.Network
 	volumes    []docker.Volume
+	images     []docker.Image
 	detail     docker.ContainerDetail
 }
 
@@ -144,6 +146,9 @@ func (f fakeDocker) ListNetworks(context.Context) ([]docker.Network, error) {
 }
 func (f fakeDocker) ListVolumes(context.Context) ([]docker.Volume, error) {
 	return f.volumes, nil
+}
+func (f fakeDocker) ListImages(context.Context) ([]docker.Image, error) {
+	return f.images, nil
 }
 func (f fakeDocker) InspectContainer(context.Context, string) (docker.ContainerDetail, error) {
 	return f.detail, nil
@@ -179,6 +184,9 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 		},
 		volumes: []docker.Volume{
 			{Name: "apidata", Driver: "local", Mountpoint: "/var/lib/docker/volumes/apidata/_data", Scope: "local"},
+		},
+		images: []docker.Image{
+			{ID: "sha256:abcdef1234567890", RepoTags: []string{"api:v1"}, Size: 64 << 20},
 		},
 		detail: docker.ContainerDetail{
 			Container:    docker.Container{ID: "11111111111122222222", Name: "api"},
@@ -252,5 +260,11 @@ func TestResourcesAndDetailsRender(t *testing.T) {
 	view = model.View()
 	if !strings.Contains(view, "/var/lib/docker/volumes/apidata/_data") {
 		t.Errorf("volume details view missing mountpoint")
+	}
+
+	model = key(model, "4") // switch to Images
+	view = model.View()
+	if !strings.Contains(view, "api:v1") || !strings.Contains(view, "64.0MB") {
+		t.Errorf("image details view missing tag or size")
 	}
 }

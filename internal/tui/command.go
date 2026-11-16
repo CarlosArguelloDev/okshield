@@ -11,6 +11,7 @@ const (
 	CmdContainers
 	CmdNetworks
 	CmdVolumes
+	CmdImages
 	CmdHelp
 	CmdQuit
 )
@@ -38,6 +39,7 @@ var commandTable = []commandSpec{
 	{CmdContainers, []string{"containers", "c"}, "/containers", "Containers view", "1"},
 	{CmdNetworks, []string{"networks", "n"}, "/networks", "Networks view", "2"},
 	{CmdVolumes, []string{"volumes", "v"}, "/volumes", "Volumes view", "3"},
+	{CmdImages, []string{"images", "img"}, "/images", "Images view", "4"},
 	{CmdHelp, []string{"help", "h"}, "/help", "Show this help overlay", ""},
 	{CmdQuit, []string{"quit", "q", "exit"}, "/quit", "Exit OkShield", "ctrl+c"},
 }

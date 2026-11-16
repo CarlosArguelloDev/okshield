@@ -11,7 +11,7 @@ type Catalog struct {
 	NoSelection      string
 	NoResource       string
 
-	Views   [3]string
+	Views   [4]string
 	Tabs    [4]string
 	Metrics [4]string
 
@@ -47,6 +47,7 @@ type Catalog struct {
 	GeneralContainers   string
 	GeneralNetworks     string
 	GeneralVolumes      string
+	GeneralImages       string
 	SectionPorts        string
 	SectionNetworks     string
 	SectionMounts       string
@@ -84,7 +85,7 @@ var uiCatalog = Catalog{
 	NoSelection:      "no selection",
 	NoResource:       "No resource selected",
 
-	Views:   [3]string{"Containers", "Networks", "Volumes"},
+	Views:   [4]string{"Containers", "Networks", "Volumes", "Images"},
 	Tabs:    [4]string{"Summary", "Metrics", "Details", "Logs"},
 	Metrics: [4]string{"CPU %", "Memory %", "Net RX/TX", "Disk I/O"},
 
@@ -120,6 +121,7 @@ var uiCatalog = Catalog{
 	GeneralContainers:   "containers",
 	GeneralNetworks:     "networks",
 	GeneralVolumes:      "volumes",
+	GeneralImages:       "images",
 	SectionPorts:        "Ports",
 	SectionNetworks:     "Networks",
 	SectionMounts:       "Mounts",

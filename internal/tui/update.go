@@ -120,6 +120,8 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.dispatch(Command{Kind: CmdNetworks})
 	case "3":
 		return m.dispatch(Command{Kind: CmdVolumes})
+	case "4":
+		return m.dispatch(Command{Kind: CmdImages})
 	case "tab":
 		m.focus = Focus((int(m.focus) + 1) % focusPaneCount)
 	case "shift+tab":
@@ -206,7 +208,7 @@ func (m Model) applyResources(msg resourcesMsg) (tea.Model, tea.Cmd) {
 	prev, hadPrev := m.selectedContainer()
 	first := m.docker != ConnUp
 	m.docker = ConnUp
-	m.containers, m.networks, m.volumes = msg.containers, msg.networks, msg.volumes
+	m.containers, m.networks, m.volumes, m.images = msg.containers, msg.networks, msg.volumes, msg.images
 
 	if hadPrev {
 		for i, c := range m.containers {
@@ -233,7 +235,7 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 		m.tab = TabSummary
 		m.status = "running deterministic summary (/whatsup)…"
 		return m, runPulse(m.ctx, m.api, m.containers)
-	case CmdContainers, CmdNetworks, CmdVolumes:
+	case CmdContainers, CmdNetworks, CmdVolumes, CmdImages:
 		m.view = View(c.Kind - CmdContainers)
 		m.cursor = 0
 		m.status = "view: " + m.view.String()

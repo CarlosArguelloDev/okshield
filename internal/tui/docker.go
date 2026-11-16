@@ -16,6 +16,7 @@ type DockerAPI interface {
 	ListContainers(ctx context.Context) ([]docker.Container, error)
 	ListNetworks(ctx context.Context) ([]docker.Network, error)
 	ListVolumes(ctx context.Context) ([]docker.Volume, error)
+	ListImages(ctx context.Context) ([]docker.Image, error)
 	InspectContainer(ctx context.Context, idOrName string) (docker.ContainerDetail, error)
 }
 
@@ -37,6 +38,7 @@ type resourcesMsg struct {
 	containers []docker.Container
 	networks   []docker.Network
 	volumes    []docker.Volume
+	images     []docker.Image
 	err        error
 }
 
@@ -85,7 +87,10 @@ func fetchResources(parent context.Context, api DockerAPI) tea.Cmd {
 		if m.networks, m.err = api.ListNetworks(ctx); m.err != nil {
 			return m
 		}
-		m.volumes, m.err = api.ListVolumes(ctx)
+		if m.volumes, m.err = api.ListVolumes(ctx); m.err != nil {
+			return m
+		}
+		m.images, m.err = api.ListImages(ctx)
 		return m
 	}
 }

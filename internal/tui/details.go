@@ -207,6 +207,8 @@ func (m Model) renderDetails() string {
 		m.networkDetails(k, m.networks[m.cursor])
 	case ViewVolumes:
 		m.volumeDetails(k, m.volumes[m.cursor])
+	case ViewImages:
+		m.imageDetails(k, m.images[m.cursor])
 	default:
 		if c, ok := m.selectedContainer(); ok {
 			m.containerDetails(k, c)
@@ -225,6 +227,7 @@ func (m Model) generalDetails(k kv) {
 	k.row(tr.GeneralContainers, strconv.Itoa(len(m.containers)))
 	k.row(tr.GeneralNetworks, strconv.Itoa(len(m.networks)))
 	k.row(tr.GeneralVolumes, strconv.Itoa(len(m.volumes)))
+	k.row(tr.GeneralImages, strconv.Itoa(len(m.images)))
 
 	if len(m.containers) > 0 {
 		k.section(tr.Views[ViewContainers])
@@ -347,6 +350,37 @@ func (m Model) volumeDetails(k kv, v docker.Volume) {
 	}
 	if !found {
 		k.b.WriteString(m.styles.Muted.Render(tr.OrphanVolume) + "\n")
+	}
+}
+
+func (m Model) imageDetails(k kv, img docker.Image) {
+	tr := m.tr()
+	k.b.WriteString(m.styles.StatusBadge(HealthInfo, " IMG ") + " " + m.styles.Title.Render(img.DisplayName()) + "\n")
+	k.row("id", img.ShortID())
+	k.row("size", humanBytes(uint64(max(0, img.Size))))
+	if !img.Created.IsZero() {
+		k.row(tr.FieldCreated, img.Created.Format("2006-01-02 15:04:05"))
+	}
+	if len(img.RepoTags) > 0 {
+		k.section("Tags")
+		for _, tag := range img.RepoTags {
+			k.b.WriteString("  " + m.styles.Text.Render(tag) + "\n")
+		}
+	}
+	k.section(tr.UsedBy)
+	tagSet := make(map[string]bool, len(img.RepoTags))
+	for _, tag := range img.RepoTags {
+		tagSet[tag] = true
+	}
+	found := false
+	for _, c := range m.containers {
+		if tagSet[c.Image] || c.Image == img.ID || c.Image == img.ShortID() {
+			k.row(c.Name, c.Status)
+			found = true
+		}
+	}
+	if !found {
+		k.b.WriteString(m.styles.Muted.Render(tr.None) + "\n")
 	}
 }
 

@@ -83,8 +83,8 @@ func (m Model) renderSidebar(w, h int) string {
 
 	b.WriteString("  " + s.Title.Render("✦ OkShield") + "\n\n")
 
-	icons := [...]string{"🐳", "⇄ ", "▣ "}
-	for i := View(0); i <= ViewVolumes; i++ {
+	icons := [...]string{"🐳", "⇄ ", "▣ ", "◈ "}
+	for i := View(0); i <= ViewImages; i++ {
 		cursor := "  "
 		style := s.Text
 		if i == m.view {
@@ -102,7 +102,7 @@ func (m Model) renderSidebar(w, h int) string {
 
 	controls := [][2]string{
 		{"↑/↓", tr.CtrlScroll},
-		{"1/2/3", tr.CtrlViews},
+		{"1-4", tr.CtrlViews},
 		{"←/→", tr.CtrlTabs},
 		{"tab", tr.CtrlFocus},
 		{"?", tr.CtrlWhatsup},
@@ -139,6 +139,8 @@ func (m Model) renderBrowser(w, h int) string {
 		pathLabel = "/docker/networks"
 	case ViewVolumes:
 		pathLabel = "/docker/volumes"
+	case ViewImages:
+		pathLabel = "/docker/images"
 	}
 	header := s.Title.Render("🐳 " + pathLabel)
 
@@ -288,6 +290,15 @@ func (m Model) renderMetadataBox(w, h int) string {
 			row("Mountpoint", v.Mountpoint)
 			fields = 3
 		}
+	case ViewImages:
+		if m.cursor >= 0 && m.cursor < len(m.images) {
+			img := m.images[m.cursor]
+			row("Image", img.DisplayName())
+			row("ImageID", img.ShortID())
+			row("Size", humanBytes(uint64(max(0, img.Size))))
+			row("Created", img.Created.Format("2006-01-02 15:04"))
+			fields = 4
+		}
 	default:
 		if c, ok := m.selectedContainer(); ok {
 			row("ContainerName", c.Name)
@@ -306,7 +317,8 @@ func (m Model) renderMetadataBox(w, h int) string {
 			row("Containers", fmt.Sprintf("%d total", len(m.containers)))
 			row("Networks", fmt.Sprintf("%d networks", len(m.networks)))
 			row("Volumes", fmt.Sprintf("%d volumes", len(m.volumes)))
-			fields = 5
+			row("Images", fmt.Sprintf("%d images", len(m.images)))
+			fields = 6
 		}
 	}
 	if fields == 0 {
@@ -401,6 +413,8 @@ func (m Model) listRow(i int) (string, string) {
 		return s.StatusBadge(HealthInfo, " NET "), n.Name + " (" + n.Driver + ")"
 	case ViewVolumes:
 		return s.StatusBadge(HealthInfo, " VOL "), m.volumes[i].Name
+	case ViewImages:
+		return s.StatusBadge(HealthInfo, " IMG "), m.images[i].DisplayName()
 	default:
 		if i == 0 {
 			return s.StatusBadge(HealthInfo, " ALL "), "General"

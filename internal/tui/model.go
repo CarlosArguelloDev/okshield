@@ -21,9 +21,10 @@ const (
 	ViewContainers View = iota
 	ViewNetworks
 	ViewVolumes
+	ViewImages
 )
 
-var viewNames = [...]string{"Containers", "Networks", "Volumes"}
+var viewNames = [...]string{"Containers", "Networks", "Volumes", "Images"}
 
 func (v View) String() string { return viewNames[v] }
 
@@ -103,6 +104,7 @@ type Model struct {
 	containers []docker.Container
 	networks   []docker.Network
 	volumes    []docker.Volume
+	images     []docker.Image
 	detail     docker.ContainerDetail // inspect of the selected container
 	stats      docker.Stats
 	logs       []string
@@ -186,6 +188,8 @@ func (m Model) itemCount() int {
 		return len(m.networks)
 	case ViewVolumes:
 		return len(m.volumes)
+	case ViewImages:
+		return len(m.images)
 	default:
 		if len(m.containers) == 0 {
 			return 0
