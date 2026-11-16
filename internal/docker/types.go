@@ -94,3 +94,31 @@ type Volume struct {
 	Scope      string
 	CreatedAt  string
 }
+
+// Image is a Docker image returned by the list API.
+type Image struct {
+	ID         string
+	RepoTags   []string
+	Size       int64
+	Created    time.Time
+	Containers int64
+}
+
+// ShortID returns the 12-char image id (stripping any "sha256:" prefix).
+func (img Image) ShortID() string {
+	id := strings.TrimPrefix(img.ID, "sha256:")
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
+}
+
+// DisplayName returns the primary repository tag or ShortID for untagged images.
+func (img Image) DisplayName() string {
+	for _, tag := range img.RepoTags {
+		if tag != "" && tag != "<none>:<none>" {
+			return tag
+		}
+	}
+	return img.ShortID()
+}

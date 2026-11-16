@@ -64,6 +64,14 @@ type apiVolume struct {
 	CreatedAt  string `json:"CreatedAt"`
 }
 
+type apiImage struct {
+	ID         string   `json:"Id"`
+	RepoTags   []string `json:"RepoTags"`
+	Size       int64    `json:"Size"`
+	Created    int64    `json:"Created"`
+	Containers int64    `json:"Containers"`
+}
+
 // ListContainers returns all containers (running and stopped), sorted by name.
 func (c *Client) ListContainers(ctx context.Context) ([]Container, error) {
 	var raw []apiContainer
@@ -122,6 +130,26 @@ func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
 		out[i] = Volume(r)
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Name < out[b].Name })
+	return out, nil
+}
+
+// ListImages returns all local images sorted by display name.
+func (c *Client) ListImages(ctx context.Context) ([]Image, error) {
+	var raw []apiImage
+	if err := c.getJSON(ctx, "/images/json", &raw); err != nil {
+		return nil, err
+	}
+	out := make([]Image, len(raw))
+	for i, r := range raw {
+		out[i] = Image{
+			ID:         r.ID,
+			RepoTags:   r.RepoTags,
+			Size:       r.Size,
+			Created:    time.Unix(r.Created, 0),
+			Containers: r.Containers,
+		}
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].DisplayName() < out[b].DisplayName() })
 	return out, nil
 }
 

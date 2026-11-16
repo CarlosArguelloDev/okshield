@@ -81,6 +81,31 @@ func TestListNetworksAndVolumes(t *testing.T) {
 	}
 }
 
+func TestListImages(t *testing.T) {
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/images/json" {
+			t.Errorf("unexpected request %s", r.URL)
+		}
+		w.Write([]byte(`[
+			{"Id":"sha256:bbbbbbbbbbbbbbbbbbbb","RepoTags":["nginx:alpine"],"Size":42000000,"Created":1700000000,"Containers":1},
+			{"Id":"sha256:aaaaaaaaaaaaaaaaaaaa","RepoTags":["<none>:<none>"],"Size":12000000,"Created":1700000100,"Containers":0}
+		]`))
+	}))
+	imgs, err := c.ListImages(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(imgs) != 2 {
+		t.Fatalf("len = %d, want 2", len(imgs))
+	}
+	if imgs[0].DisplayName() != "aaaaaaaaaaaa" || imgs[0].ShortID() != "aaaaaaaaaaaa" {
+		t.Errorf("untagged image = %+v", imgs[0])
+	}
+	if imgs[1].DisplayName() != "nginx:alpine" || imgs[1].Size != 42000000 || imgs[1].Containers != 1 {
+		t.Errorf("tagged image = %+v", imgs[1])
+	}
+}
+
 func TestExitCode(t *testing.T) {
 	tests := []struct {
 		status string
