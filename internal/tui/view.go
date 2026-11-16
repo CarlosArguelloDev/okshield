@@ -95,24 +95,10 @@ func (m Model) renderSidebar(w, h int) string {
 	}
 
 	b.WriteByte('\n')
-	b.WriteString(m.sectionDivider("Pinned", innerW) + "\n")
-	for idx, t := range tr.Tabs {
-		cursor := "  "
-		st := s.Text
-		if Tab(idx) == m.tab {
-			cursor = s.Title.Render("> ")
-			st = s.Selected
-		}
-		fmt.Fprintf(&b, "%s%s\n", cursor, st.Render(t))
-	}
-
-	b.WriteByte('\n')
 	b.WriteString(m.sectionDivider("Host", innerW) + "\n")
 	fmt.Fprintf(&b, "  %s %s\n", s.Muted.Render("host"), s.Text.Render(truncate(m.hostname, max(4, innerW-9))))
-	fmt.Fprintf(&b, "  %s %s  %s %s\n\n",
-		s.Muted.Render("dkr"), m.connGlyph(m.docker),
-		s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)),
-	)
+	fmt.Fprintf(&b, "  %s %s\n", s.Muted.Render("dkr"), m.connGlyph(m.docker))
+	fmt.Fprintf(&b, "  %s %s\n\n", s.Muted.Render("mem"), s.Warn.Render(humanBytes(m.memAlloc)))
 
 	controls := [][2]string{
 		{"↑/↓", tr.CtrlScroll},
