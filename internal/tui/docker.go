@@ -27,6 +27,27 @@ type TelemetryAPI interface {
 	ContainerLogs(ctx context.Context, idOrName string, tail int) ([]string, error)
 }
 
+// ActionAPI optionally exposes lifecycle and resource mutation calls.
+type ActionAPI interface {
+	StartContainer(ctx context.Context, id string) error
+	StopContainer(ctx context.Context, id string) error
+	RestartContainer(ctx context.Context, id string) error
+	PauseContainer(ctx context.Context, id string) error
+	UnpauseContainer(ctx context.Context, id string) error
+	RemoveContainer(ctx context.Context, id string, force bool) error
+	DisconnectNetwork(ctx context.Context, netID, containerID string) error
+	PruneNetworks(ctx context.Context) error
+	RemoveVolume(ctx context.Context, name string) error
+	PullImage(ctx context.Context, ref string) error
+	RemoveImage(ctx context.Context, id string) error
+}
+
+type dockerActionMsg struct {
+	label string
+	btnID string
+	err   error
+}
+
 const (
 	refreshInterval = 3 * time.Second
 	metricsInterval = 1 * time.Second

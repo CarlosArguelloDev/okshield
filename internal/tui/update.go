@@ -91,6 +91,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flashBtn = ""
 		}
 		return m, nil
+
+	case dockerActionMsg:
+		m.toastSeq++
+		seq := m.toastSeq
+		m.flashBtn = msg.btnID
+		if msg.err != nil {
+			m.toast = IconClose + " " + truncate(msg.err.Error(), 32)
+		} else {
+			m.toast = IconCheck + " " + truncate(msg.label, 32)
+		}
+		m.status = m.toast
+		return m, tea.Batch(
+			fetchResources(m.ctx, m.api),
+			m.detailCmd(),
+			tea.Tick(toastDuration, func(time.Time) tea.Msg {
+				return clipboardClearMsg{seq: seq}
+			}),
+		)
 	}
 	return m, nil
 }
@@ -177,6 +195,8 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.cursor--
 				m.mainScroll = 0
 				m.metaScroll = 0
+				m.pendingConfirm = ""
+				m.pendingLabel = ""
 				return m, tea.Batch(m.detailCmd(), m.metricsCmd())
 			}
 		}
@@ -201,6 +221,8 @@ func (m Model) updateNavigation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.cursor++
 				m.mainScroll = 0
 				m.metaScroll = 0
+				m.pendingConfirm = ""
+				m.pendingLabel = ""
 				return m, tea.Batch(m.detailCmd(), m.metricsCmd())
 			}
 		}
@@ -248,6 +270,8 @@ func (m Model) dispatch(c Command) (tea.Model, tea.Cmd) {
 	case CmdContainers, CmdNetworks, CmdVolumes, CmdImages:
 		m.view = View(c.Kind - CmdContainers)
 		m.cursor = 0
+		m.pendingConfirm = ""
+		m.pendingLabel = ""
 		m.status = "view: " + m.view.String()
 		return m, m.detailCmd()
 	case CmdHelp:
@@ -373,6 +397,8 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				m.focus = FocusSidebar
 				m.mainScroll = 0
 				m.metaScroll = 0
+				m.pendingConfirm = ""
+				m.pendingLabel = ""
 				return m, tea.Batch(m.detailCmd(), m.metricsCmd())
 			}
 		}
@@ -384,7 +410,36 @@ func (m Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.focus = FocusSidebar
 			m.mainScroll = 0
 			m.metaScroll = 0
+			m.pendingConfirm = ""
+			m.pendingLabel = ""
 			return m, tea.Batch(m.detailCmd(), m.metricsCmd())
+		}
+	}
+
+	if m.pendingConfirm != "" {
+		if zone.Get("act-confirm").InBounds(msg) {
+			actID := m.pendingConfirm
+			m.pendingConfirm = ""
+			m.pendingLabel = ""
+			return m.triggerAction(actID)
+		}
+		if zone.Get("act-cancel").InBounds(msg) {
+			m.pendingConfirm = ""
+			m.pendingLabel = ""
+			return m, nil
+		}
+	} else {
+		_, specs := m.contextActions()
+		for _, sp := range specs {
+			if zone.Get(sp.id).InBounds(msg) {
+				m.focus = FocusMetadata
+				if sp.destructive {
+					m.pendingConfirm = sp.id
+					m.pendingLabel = sp.confirmLabel
+					return m, nil
+				}
+				return m.triggerAction(sp.id)
+			}
 		}
 	}
 
@@ -448,12 +503,16 @@ func (m Model) handleMouseWheel(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.cursor--
 			m.mainScroll = 0
 			m.metaScroll = 0
+			m.pendingConfirm = ""
+			m.pendingLabel = ""
 			return m, tea.Batch(m.detailCmd(), m.metricsCmd())
 		}
 		if !up && m.cursor < m.itemCount()-1 {
 			m.cursor++
 			m.mainScroll = 0
 			m.metaScroll = 0
+			m.pendingConfirm = ""
+			m.pendingLabel = ""
 			return m, tea.Batch(m.detailCmd(), m.metricsCmd())
 		}
 		return m, nil

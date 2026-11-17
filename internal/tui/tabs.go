@@ -88,13 +88,13 @@ func (m Model) renderLogs(maxLines int) string {
 		return b.String()
 	}
 
-	dedupBtn := s.Key.Render("[ ⧉ Copy Deduplicated ]")
+	dedupBtn := s.Key.Render("[ " + IconCopy + " Copy Deduplicated ]")
 	if m.flashBtn == "copy-logs-dedup" {
-		dedupBtn = s.StatusBadge(HealthOK, " ✓ Copied Deduplicated ")
+		dedupBtn = s.StatusBadge(HealthOK, " "+IconCheck+" Copied Deduplicated ")
 	}
-	rawBtn := s.Key.Render("[ ⧉ Copy All Logs ]")
+	rawBtn := s.Key.Render("[ " + IconCopy + " Copy All Logs ]")
 	if m.flashBtn == "copy-logs-raw" {
-		rawBtn = s.StatusBadge(HealthOK, " ✓ Copied All Logs ")
+		rawBtn = s.StatusBadge(HealthOK, " "+IconCheck+" Copied All Logs ")
 	}
 	fmt.Fprintf(&b, "%s %s %s  %s\n",
 		s.Title.Render(tr.LogsTitle),

@@ -71,7 +71,7 @@ func (m Model) renderBottomRow(h int) string {
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		zone.Mark(zonePaneProcesses, m.renderProcessesBox(w1, h)),
-		zone.Mark(zonePaneMetadata, m.renderMetadataBox(w2, h)),
+		zone.Mark(zonePaneMetadata, m.renderActionsBox(w2, h)),
 	)
 }
 
@@ -276,95 +276,6 @@ func (m Model) renderProcessesBox(w, h int) string {
 		TopTitle:    "Processes",
 		Body:        scrollLines(wrapped, m.procScroll, bodyRows),
 		FootBadges:  []string{fmt.Sprintf("%d/%d", anomalies, len(m.containers))},
-	})
-}
-
-func (m Model) renderMetadataBox(w, h int) string {
-	s := m.styles
-	var b strings.Builder
-	row := func(k, v string) {
-		if v == "" {
-			v = "-"
-		}
-		fmt.Fprintf(&b, "%s %s\n", s.Muted.Render(fmt.Sprintf("%-14s", k)), s.Text.Render(v))
-	}
-	rowCopy := func(k, v, copyKey string) {
-		if v == "" || v == "-" {
-			row(k, "-")
-			return
-		}
-		fmt.Fprintf(&b, "%s %s %s\n", s.Muted.Render(fmt.Sprintf("%-14s", k)), s.Text.Render(v), m.copyIcon(copyKey))
-	}
-
-	fields := 0
-	switch m.view {
-	case ViewNetworks:
-		if m.cursor >= 0 && m.cursor < len(m.networks) {
-			n := m.networks[m.cursor]
-			rowCopy("NetworkName", n.Name, "m-net-name")
-			row("Driver", n.Driver)
-			row("Scope", n.Scope)
-			if len(n.Subnets) > 0 {
-				rowCopy("Subnet", n.Subnets[0].CIDR, "m-subnet")
-			}
-			fields = 4
-		}
-	case ViewVolumes:
-		if m.cursor >= 0 && m.cursor < len(m.volumes) {
-			v := m.volumes[m.cursor]
-			rowCopy("VolumeName", v.Name, "m-vol-name")
-			row("Driver", v.Driver)
-			rowCopy("Mountpoint", v.Mountpoint, "m-vol-mp")
-			fields = 3
-		}
-	case ViewImages:
-		if m.cursor >= 0 && m.cursor < len(m.images) {
-			img := m.images[m.cursor]
-			rowCopy("Image", img.DisplayName(), "m-img-tag")
-			rowCopy("ImageID", img.ShortID(), "m-img-id")
-			row("Size", humanBytes(uint64(max(0, img.Size))))
-			row("Created", img.Created.Format("2006-01-02 15:04"))
-			fields = 4
-		}
-	default:
-		if c, ok := m.selectedContainer(); ok {
-			rowCopy("ContainerName", c.Name, "m-name")
-			rowCopy("Image", c.Image, "m-image")
-			row("State", c.Status)
-			if len(c.Networks) > 0 {
-				rowCopy("NetworkIP", c.Networks[0].Network+" "+c.Networks[0].IP, "m-ip")
-			}
-			if len(c.Mounts) > 0 {
-				rowCopy("Mount", c.Mounts[0].Destination, "m-mount")
-			}
-			fields = 5
-		} else if len(m.containers) > 0 {
-			row("Scope", "General (All)")
-			row("Host", m.hostname)
-			row("Containers", fmt.Sprintf("%d total", len(m.containers)))
-			row("Networks", fmt.Sprintf("%d networks", len(m.networks)))
-			row("Volumes", fmt.Sprintf("%d volumes", len(m.volumes)))
-			row("Images", fmt.Sprintf("%d images", len(m.images)))
-			fields = 6
-		}
-	}
-	if fields == 0 {
-		b.WriteString(s.Muted.Render(m.tr().NoResource))
-	}
-	bodyRows := max(1, h-2)
-	contentW := max(1, w-4)
-	wrapped := wrapBody(strings.TrimRight(b.String(), "\n"), contentW)
-	borderColor := ColorSecondary
-	if m.focus == FocusMetadata {
-		borderColor = ColorFocus
-	}
-	return renderBox(boxSpec{
-		Width:       w,
-		Height:      h,
-		BorderColor: borderColor,
-		TopTitle:    "Metadata",
-		Body:        scrollLines(wrapped, m.metaScroll, bodyRows),
-		FootBadges:  []string{fmt.Sprintf("%d/%d", min(1, fields), fields)},
 	})
 }
 

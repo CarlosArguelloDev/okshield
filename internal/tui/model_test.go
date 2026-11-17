@@ -139,6 +139,13 @@ type fakeDocker struct {
 	volumes    []docker.Volume
 	images     []docker.Image
 	detail     docker.ContainerDetail
+	actions    *[]string
+}
+
+func (f fakeDocker) record(op string) {
+	if f.actions != nil {
+		*f.actions = append(*f.actions, op)
+	}
 }
 
 func (f fakeDocker) ListContainers(context.Context) ([]docker.Container, error) {
@@ -155,6 +162,50 @@ func (f fakeDocker) ListImages(context.Context) ([]docker.Image, error) {
 }
 func (f fakeDocker) InspectContainer(context.Context, string) (docker.ContainerDetail, error) {
 	return f.detail, nil
+}
+func (f fakeDocker) StartContainer(_ context.Context, id string) error {
+	f.record("start:" + id)
+	return nil
+}
+func (f fakeDocker) StopContainer(_ context.Context, id string) error {
+	f.record("stop:" + id)
+	return nil
+}
+func (f fakeDocker) RestartContainer(_ context.Context, id string) error {
+	f.record("restart:" + id)
+	return nil
+}
+func (f fakeDocker) PauseContainer(_ context.Context, id string) error {
+	f.record("pause:" + id)
+	return nil
+}
+func (f fakeDocker) UnpauseContainer(_ context.Context, id string) error {
+	f.record("unpause:" + id)
+	return nil
+}
+func (f fakeDocker) RemoveContainer(_ context.Context, id string, force bool) error {
+	f.record("rm:" + id)
+	return nil
+}
+func (f fakeDocker) DisconnectNetwork(_ context.Context, netID, cID string) error {
+	f.record("disconnect:" + netID + ":" + cID)
+	return nil
+}
+func (f fakeDocker) PruneNetworks(context.Context) error {
+	f.record("prune-net")
+	return nil
+}
+func (f fakeDocker) RemoveVolume(_ context.Context, name string) error {
+	f.record("rm-vol:" + name)
+	return nil
+}
+func (f fakeDocker) PullImage(_ context.Context, ref string) error {
+	f.record("pull:" + ref)
+	return nil
+}
+func (f fakeDocker) RemoveImage(_ context.Context, id string) error {
+	f.record("rm-img:" + id)
+	return nil
 }
 
 func TestResourcesAndDetailsRender(t *testing.T) {
@@ -353,7 +404,9 @@ func TestCopyToClipboardZones(t *testing.T) {
 		t.Fatalf("formatOSC52 = %q, want %q", got, "\x1b]52;c;aGVsbG8=\x07")
 	}
 
+	var ops []string
 	fd := fakeDocker{
+		actions: &ops,
 		containers: []docker.Container{
 			{
 				ID:     "11111111111122222222",
@@ -395,7 +448,7 @@ func TestCopyToClipboardZones(t *testing.T) {
 		return nil
 	}
 
-	clickAndRunCmd := func(id string) tea.Msg {
+	clickZone := func(id string) tea.Cmd {
 		z := waitZone(id)
 		out, cmd := model.Update(tea.MouseMsg{
 			X:      z.StartX,
@@ -404,14 +457,21 @@ func TestCopyToClipboardZones(t *testing.T) {
 			Button: tea.MouseButtonLeft,
 		})
 		model = out.(Model)
+		return cmd
+	}
+
+	clickAndRunCmd := func(id string) tea.Msg {
+		cmd := clickZone(id)
 		if cmd == nil {
 			t.Fatalf("clicking %q returned nil cmd", id)
 		}
 		return cmd()
 	}
 
-	// 1. Metadata copy icon ("copy-meta-m-name").
-	msg := clickAndRunCmd("copy-meta-m-name")
+	// 1. Details tab copy icons ("copy-meta-d-name" & "copy-meta-d-image").
+	model = key(model, "right")
+	model = key(model, "right") // TabDetails
+	msg := clickAndRunCmd("copy-meta-d-name")
 	copied, ok := msg.(clipboardCopiedMsg)
 	if !ok || copied.label != "api" {
 		t.Fatalf("unexpected msg = %#v", msg)
@@ -424,16 +484,12 @@ func TestCopyToClipboardZones(t *testing.T) {
 	if !strings.Contains(model.View(), "✓ Copied: api") {
 		t.Errorf("View() footer missing toast")
 	}
-
-	// 2. Details tab copy icon ("copy-meta-d-image").
-	model = key(model, "right")
-	model = key(model, "right") // TabDetails
 	msg = clickAndRunCmd("copy-meta-d-image")
 	if copied, ok := msg.(clipboardCopiedMsg); !ok || copied.label != "api:v1" {
 		t.Errorf("unexpected details copy msg = %#v", msg)
 	}
 
-	// 3. Logs tab action buttons ("copy-logs-dedup" & "copy-logs-raw").
+	// 2. Logs tab action buttons ("copy-logs-dedup" & "copy-logs-raw").
 	model = key(model, "right") // TabLogs
 	msg = clickAndRunCmd("copy-logs-dedup")
 	if copied, ok := msg.(clipboardCopiedMsg); !ok || copied.btnID != "copy-logs-dedup" {
@@ -444,12 +500,39 @@ func TestCopyToClipboardZones(t *testing.T) {
 		t.Errorf("unexpected raw msg = %#v", msg)
 	}
 
-	// 4. Toast clear message removes toast and flashBtn.
+	// 3. Toast clear message removes toast and flashBtn.
 	out, _ = model.Update(clipboardCopiedMsg{label: "test", btnID: "copy-logs-raw"})
 	model = out.(Model)
 	out, _ = model.Update(clipboardClearMsg{seq: model.toastSeq})
 	model = out.(Model)
 	if model.toast != "" || model.flashBtn != "" {
 		t.Errorf("expected toast & flashBtn cleared, got toast=%q flashBtn=%q", model.toast, model.flashBtn)
+	}
+
+	// 4. Actions panel: non-destructive Restart on running container.
+	msg = clickAndRunCmd("act-restart")
+	actMsg, ok := msg.(dockerActionMsg)
+	if !ok || actMsg.err != nil || actMsg.label != "Restarted api" {
+		t.Fatalf("unexpected restart msg = %#v", msg)
+	}
+
+	// 5. Actions panel: destructive Rm -> Cancel -> Rm -> Confirm.
+	if cmd := clickZone("act-rm"); cmd != nil {
+		t.Fatalf("clicking destructive act-rm should wait for confirmation, got cmd")
+	}
+	if model.pendingConfirm != "act-rm" || !strings.Contains(model.View(), "Confirm Rm api?") {
+		t.Fatalf("expected confirmation prompt, got pendingConfirm=%q", model.pendingConfirm)
+	}
+	_ = clickZone("act-cancel")
+	if model.pendingConfirm != "" {
+		t.Errorf("expected act-cancel to clear pendingConfirm")
+	}
+	_ = clickZone("act-rm")
+	msg = clickAndRunCmd("act-confirm")
+	if actMsg, ok := msg.(dockerActionMsg); !ok || actMsg.err != nil || actMsg.label != "Removed api" {
+		t.Fatalf("unexpected confirm rm msg = %#v", msg)
+	}
+	if len(ops) != 2 || ops[0] != "restart:11111111111122222222" || ops[1] != "rm:11111111111122222222" {
+		t.Errorf("recorded ops = %v", ops)
 	}
 }

@@ -122,12 +122,14 @@ type Model struct {
 	pulse    summarizer.Report
 	hasPulse bool
 
-	input    textinput.Model
-	status   string
-	toast    string
-	flashBtn string
-	toastSeq int
-	showHelp bool
+	input          textinput.Model
+	status         string
+	toast          string
+	flashBtn       string
+	toastSeq       int
+	pendingConfirm string
+	pendingLabel   string
+	showHelp       bool
 }
 
 // New builds the root model.

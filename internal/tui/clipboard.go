@@ -13,7 +13,7 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-const toastDuration = 2 * time.Second
+const toastDuration = 1500 * time.Millisecond
 
 type clipboardCopiedMsg struct {
 	label string
@@ -50,9 +50,9 @@ func copyToClipboard(text, label, btnID string) tea.Cmd {
 func (m Model) copyIcon(key string) string {
 	zoneID := "copy-meta-" + key
 	if m.flashBtn == zoneID {
-		return zone.Mark(zoneID, m.styles.OK.Render("\u00a0✓\u00a0\u00a0"))
+		return zone.Mark(zoneID, m.styles.OK.Render("\u00a0"+IconCheck+"\u00a0\u00a0"))
 	}
-	return zone.Mark(zoneID, m.styles.Key.Render("\u00a0⧉\u00a0\u00a0"))
+	return zone.Mark(zoneID, m.styles.Key.Render("\u00a0"+IconCopy+"\u00a0\u00a0"))
 }
 
 func (m Model) metaCopyTargets() []copyTarget {
@@ -63,7 +63,6 @@ func (m Model) metaCopyTargets() []copyTarget {
 		}
 		n := m.networks[m.cursor]
 		targets := []copyTarget{
-			{key: "m-net-name", label: n.Name, value: n.Name},
 			{key: "d-net-name", label: n.Name, value: n.Name},
 		}
 		for i, sn := range n.Subnets {
@@ -72,9 +71,6 @@ func (m Model) metaCopyTargets() []copyTarget {
 				label: sn.CIDR,
 				value: sn.CIDR,
 			})
-			if i == 0 {
-				targets = append(targets, copyTarget{key: "m-subnet", label: sn.CIDR, value: sn.CIDR})
-			}
 		}
 		return targets
 
@@ -84,9 +80,7 @@ func (m Model) metaCopyTargets() []copyTarget {
 		}
 		v := m.volumes[m.cursor]
 		return []copyTarget{
-			{key: "m-vol-name", label: v.Name, value: v.Name},
 			{key: "d-vol-name", label: v.Name, value: v.Name},
-			{key: "m-vol-mp", label: v.Mountpoint, value: v.Mountpoint},
 			{key: "d-vol-mp", label: v.Mountpoint, value: v.Mountpoint},
 		}
 
@@ -96,9 +90,7 @@ func (m Model) metaCopyTargets() []copyTarget {
 		}
 		img := m.images[m.cursor]
 		return []copyTarget{
-			{key: "m-img-tag", label: img.DisplayName(), value: img.DisplayName()},
 			{key: "d-img-tag", label: img.DisplayName(), value: img.DisplayName()},
-			{key: "m-img-id", label: img.ShortID(), value: img.ShortID()},
 			{key: "d-img-id", label: img.ShortID(), value: img.ID},
 		}
 
@@ -108,18 +100,10 @@ func (m Model) metaCopyTargets() []copyTarget {
 			return nil
 		}
 		targets := []copyTarget{
-			{key: "m-name", label: c.Name, value: c.Name},
-			{key: "m-image", label: c.Image, value: c.Image},
 			{key: "d-name", label: c.Name, value: c.Name},
 			{key: "d-id-short", label: c.ShortID(), value: c.ShortID()},
 			{key: "d-id-full", label: c.ShortID(), value: c.ID},
 			{key: "d-image", label: c.Image, value: c.Image},
-		}
-		if len(c.Networks) > 0 {
-			targets = append(targets, copyTarget{key: "m-ip", label: c.Networks[0].IP, value: c.Networks[0].IP})
-		}
-		if len(c.Mounts) > 0 {
-			targets = append(targets, copyTarget{key: "m-mount", label: c.Mounts[0].Destination, value: c.Mounts[0].Destination})
 		}
 		if m.detail.ID == c.ID && len(m.detail.Cmd) > 0 {
 			targets = append(targets, copyTarget{

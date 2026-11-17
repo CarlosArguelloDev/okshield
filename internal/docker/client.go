@@ -78,9 +78,16 @@ func IsNotFound(err error) bool {
 // do performs a GET request and returns the open response body on success.
 // The caller must close it.
 func (c *Client) do(ctx context.Context, path string) (io.ReadCloser, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+	return c.doRequest(ctx, http.MethodGet, path, nil)
+}
+
+func (c *Client) doRequest(ctx context.Context, method, path string, reqBody io.Reader) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, reqBody)
 	if err != nil {
 		return nil, err
+	}
+	if reqBody != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -95,6 +102,15 @@ func (c *Client) do(ctx context.Context, path string) (io.ReadCloser, error) {
 		return nil, &APIError{Status: resp.StatusCode, Message: body.Message}
 	}
 	return resp.Body, nil
+}
+
+func (c *Client) doNoContent(ctx context.Context, method, path string, reqBody io.Reader) error {
+	body, err := c.doRequest(ctx, method, path, reqBody)
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, body)
+	return body.Close()
 }
 
 // getJSON performs a GET request and decodes the JSON body into out.
