@@ -1,21 +1,21 @@
 package tui
 
-// Nerd Font icons defined as explicit 16-bit Unicode escape sequences so they
-// never corrupt across editors, encodings, or SSH sessions.
+// Standard Unicode symbols defined as explicit escape sequences so they render
+// cleanly across all terminals and SSH sessions without requiring a Nerd Font.
 const (
-	IconRestart     = "\uf01e"
-	IconStop        = "\uf04d"
-	IconPause       = "\uf04c"
-	IconPlay        = "\uf04b"
-	IconShell       = "\uf120"
-	IconTrash       = "\uf1f8"
-	IconInspect     = "\uf05a"
-	IconNetwork     = "\uf0e8"
-	IconDisconnect  = "\uf127"
-	IconFolder      = "\uf07b"
-	IconDownload    = "\uf019"
-	IconCopy        = "\uf0c5"
-	IconCheck       = "\uf00c"
-	IconClose       = "\uf00d"
-	IconStethoscope = "\uf0f1"
+	IconRestart     = "\u21bb"
+	IconStop        = "\u25a0"
+	IconPause       = "\u2016"
+	IconPlay        = "\u25b8"
+	IconShell       = ">_"
+	IconTrash       = "\u2715"
+	IconInspect     = "\u25c8"
+	IconNetwork     = "\u21c4"
+	IconDisconnect  = "\u2298"
+	IconFolder      = "\u25a3"
+	IconDownload    = "\u2193"
+	IconCopy        = "\u29c9"
+	IconCheck       = "\u2713"
+	IconClose       = "\u2715"
+	IconStethoscope = "\u2726"
 )
