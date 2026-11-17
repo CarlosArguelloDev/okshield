@@ -50,9 +50,9 @@ func copyToClipboard(text, label, btnID string) tea.Cmd {
 func (m Model) copyIcon(key string) string {
 	zoneID := "copy-meta-" + key
 	if m.flashBtn == zoneID {
-		return zone.Mark(zoneID, m.styles.OK.Render("[\u00a0✓\u00a0]"))
+		return zone.Mark(zoneID, m.styles.OK.Render("\u00a0✓\u00a0\u00a0"))
 	}
-	return zone.Mark(zoneID, m.styles.Key.Render("[\u00a0⧉\u00a0]"))
+	return zone.Mark(zoneID, m.styles.Key.Render("\u00a0⧉\u00a0\u00a0"))
 }
 
 func (m Model) metaCopyTargets() []copyTarget {
